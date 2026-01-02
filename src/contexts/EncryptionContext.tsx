@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
-import { STORAGE_KEYS } from "@/lib/constants";
+import { getUserStorageKey, USER_STORAGE_KEYS } from "@/lib/storage";
 import { 
   generateKeyPair, 
   keyToHex, 
@@ -11,6 +11,7 @@ import {
   type EncryptedMessage 
 } from "@/lib/encryption";
 import { toast } from "@/hooks/use-toast";
+import { useBlockchain } from "@/contexts/BlockchainContext";
 
 interface EncryptionContextType {
   publicKey: string | null;
@@ -30,14 +31,26 @@ interface EncryptionContextType {
 const EncryptionContext = createContext<EncryptionContextType | null>(null);
 
 export function EncryptionProvider({ children }: { children: ReactNode }) {
+  const { walletState } = useBlockchain();
   const [keyPair, setKeyPair] = useState<KeyPair | null>(null);
   const [publicKey, setPublicKey] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // Load keys from localStorage on mount
+  // Load keys from user-scoped localStorage when address changes
   useEffect(() => {
-    const storedPrivateKey = localStorage.getItem(STORAGE_KEYS.PRIVATE_KEY);
-    const storedPublicKey = localStorage.getItem(STORAGE_KEYS.PUBLIC_KEY);
+    if (!walletState.address) {
+      // No wallet connected - clear keys from state
+      setKeyPair(null);
+      setPublicKey(null);
+      return;
+    }
+    
+    const storedPrivateKey = localStorage.getItem(
+      getUserStorageKey(USER_STORAGE_KEYS.PRIVATE_KEY, walletState.address)
+    );
+    const storedPublicKey = localStorage.getItem(
+      getUserStorageKey(USER_STORAGE_KEYS.PUBLIC_KEY, walletState.address)
+    );
     
     if (storedPrivateKey && storedPublicKey) {
       try {
@@ -47,13 +60,28 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
         setPublicKey(storedPublicKey);
       } catch (e) {
         console.error("Failed to load stored keys:", e);
-        localStorage.removeItem(STORAGE_KEYS.PRIVATE_KEY);
-        localStorage.removeItem(STORAGE_KEYS.PUBLIC_KEY);
+        // Clear invalid keys
+        localStorage.removeItem(
+          getUserStorageKey(USER_STORAGE_KEYS.PRIVATE_KEY, walletState.address)
+        );
+        localStorage.removeItem(
+          getUserStorageKey(USER_STORAGE_KEYS.PUBLIC_KEY, walletState.address)
+        );
+        setKeyPair(null);
+        setPublicKey(null);
       }
+    } else {
+      // No keys found for this user
+      setKeyPair(null);
+      setPublicKey(null);
     }
-  }, []);
+  }, [walletState.address]);
 
   const generateKeys = useCallback(async () => {
+    if (!walletState.address) {
+      throw new Error("Wallet not connected");
+    }
+    
     setIsGenerating(true);
     
     try {
@@ -64,9 +92,15 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
       const publicKeyHex = keyToHex(newKeyPair.publicKey);
       const privateKeyHex = keyToHex(newKeyPair.secretKey);
       
-      // Store keys
-      localStorage.setItem(STORAGE_KEYS.PRIVATE_KEY, privateKeyHex);
-      localStorage.setItem(STORAGE_KEYS.PUBLIC_KEY, publicKeyHex);
+      // Store keys with user address prefix
+      localStorage.setItem(
+        getUserStorageKey(USER_STORAGE_KEYS.PRIVATE_KEY, walletState.address),
+        privateKeyHex
+      );
+      localStorage.setItem(
+        getUserStorageKey(USER_STORAGE_KEYS.PUBLIC_KEY, walletState.address),
+        publicKeyHex
+      );
       
       setKeyPair(newKeyPair);
       setPublicKey(publicKeyHex);
@@ -80,7 +114,7 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsGenerating(false);
     }
-  }, []);
+  }, [walletState.address]);
 
   const importKeys = useCallback((privateKeyHex: string): boolean => {
     try {
@@ -88,13 +122,7 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
         throw new Error("Invalid private key length");
       }
       
-      const secretKey = hexToKey(privateKeyHex);
-      // Derive public key from secret key (first 32 bytes of 64-byte secret key is not the public key for nacl.box)
-      // We need to regenerate the keypair or store both keys
       // For NaCl box, we need to store the public key separately
-      
-      // Since nacl.box.keyPair.fromSecretKey expects 32-byte seed, we handle this differently
-      // For simplicity, require both keys to be stored
       toast({
         title: "Import failed",
         description: "Please use the backup file with both keys",
@@ -118,8 +146,14 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
   }, [keyPair]);
 
   const clearKeys = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEYS.PRIVATE_KEY);
-    localStorage.removeItem(STORAGE_KEYS.PUBLIC_KEY);
+    if (!walletState.address) return;
+    
+    localStorage.removeItem(
+      getUserStorageKey(USER_STORAGE_KEYS.PRIVATE_KEY, walletState.address)
+    );
+    localStorage.removeItem(
+      getUserStorageKey(USER_STORAGE_KEYS.PUBLIC_KEY, walletState.address)
+    );
     setKeyPair(null);
     setPublicKey(null);
     
@@ -127,7 +161,7 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
       title: "Keys cleared",
       description: "Your encryption keys have been removed",
     });
-  }, []);
+  }, [walletState.address]);
 
   const encrypt = useCallback((message: string, recipientPublicKeyHex: string): EncryptedMessage => {
     if (!keyPair) {

@@ -1,9 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from "react";
 import { ApiPromise, WsProvider } from "@polkadot/api";
 import { web3Enable, web3Accounts, web3FromAddress } from "@polkadot/extension-dapp";
 import { RPC_ENDPOINT, APP_NAME, SPAM_BOND } from "@/lib/constants";
 import { BlockchainState, WalletState, UserProfile, Contact, StoredMessage } from "@/lib/types";
 import { toast } from "@/hooks/use-toast";
+import { getUserStorageKey, USER_STORAGE_KEYS } from "@/lib/storage";
+import { truncateKey } from "@/lib/encryption";
 
 interface BlockchainContextType {
   api: ApiPromise | null;
@@ -12,6 +14,7 @@ interface BlockchainContextType {
   userProfile: UserProfile | null;
   contacts: Contact[];
   messages: StoredMessage[];
+  contactsLoading: boolean;
   
   // Wallet functions
   connectWallet: () => Promise<void>;
@@ -28,6 +31,7 @@ interface BlockchainContextType {
   approveContact: (address: string) => Promise<void>;
   removeContact: (address: string) => Promise<void>;
   fetchContacts: () => Promise<void>;
+  refreshContacts: () => Promise<void>;
   isContactApproved: (address: string) => Promise<boolean>;
   
   // Message functions
@@ -56,6 +60,10 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [messages, setMessages] = useState<StoredMessage[]>([]);
+  const [contactsLoading, setContactsLoading] = useState(false);
+  
+  // Track previous address for account switch detection
+  const previousAddressRef = useRef<string | null>(null);
 
   // Initialize API connection
   useEffect(() => {
@@ -118,22 +126,37 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Load messages from localStorage
+  // Load messages from user-scoped localStorage
   useEffect(() => {
-    const stored = localStorage.getItem("messaging_messages");
+    if (!walletState.address) {
+      setMessages([]);
+      return;
+    }
+    
+    const stored = localStorage.getItem(
+      getUserStorageKey(USER_STORAGE_KEYS.MESSAGES, walletState.address)
+    );
     if (stored) {
       try {
         setMessages(JSON.parse(stored));
       } catch (e) {
         console.error("Failed to parse stored messages:", e);
+        setMessages([]);
       }
+    } else {
+      setMessages([]);
     }
-  }, []);
+  }, [walletState.address]);
 
-  // Save messages to localStorage
+  // Save messages to user-scoped localStorage
   useEffect(() => {
-    localStorage.setItem("messaging_messages", JSON.stringify(messages));
-  }, [messages]);
+    if (!walletState.address) return;
+    
+    localStorage.setItem(
+      getUserStorageKey(USER_STORAGE_KEYS.MESSAGES, walletState.address),
+      JSON.stringify(messages)
+    );
+  }, [messages, walletState.address]);
 
   // Update balance when address changes
   useEffect(() => {
@@ -165,6 +188,58 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
       unsubscribe?.();
     };
   }, [api, walletState.address]);
+
+  // Handle account switching - clear previous user's state
+  useEffect(() => {
+    const currentAddress = walletState.address;
+    const previousAddress = previousAddressRef.current;
+    
+    if (previousAddress && currentAddress && previousAddress !== currentAddress) {
+      // Account switched - clear previous user's state
+      console.log(`Account switched from ${truncateKey(previousAddress)} to ${truncateKey(currentAddress)}`);
+      
+      // Clear React state
+      setContacts([]);
+      setMessages([]);
+      setUserProfile(null);
+      
+      toast({
+        title: "Account switched",
+        description: `Switched to ${truncateKey(currentAddress)}`,
+      });
+    }
+    
+    previousAddressRef.current = currentAddress;
+  }, [walletState.address]);
+
+  // Poll for account changes from Polkadot extension
+  useEffect(() => {
+    if (!walletState.connected) return;
+    
+    const checkAccountChange = setInterval(async () => {
+      try {
+        const currentAccounts = await web3Accounts();
+        if (currentAccounts.length > 0) {
+          const newAddress = currentAccounts[0].address;
+          if (newAddress && newAddress !== walletState.address) {
+            setWalletState((prev) => ({
+              ...prev,
+              address: newAddress,
+              balance: null,
+              accounts: currentAccounts.map((a) => ({
+                address: a.address,
+                meta: { name: a.meta.name },
+              })),
+            }));
+          }
+        }
+      } catch (error) {
+        console.error("Failed to check account changes:", error);
+      }
+    }, 2000);
+    
+    return () => clearInterval(checkAccountChange);
+  }, [walletState.connected, walletState.address]);
 
   const connectWallet = useCallback(async () => {
     try {
@@ -223,15 +298,17 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
     });
     setUserProfile(null);
     setContacts([]);
+    setMessages([]);
+    previousAddressRef.current = null;
   }, []);
 
   const selectAccount = useCallback((address: string) => {
+    // This will trigger the account switch effect which clears state
     setWalletState((prev) => ({
       ...prev,
       address,
       balance: null,
     }));
-    setUserProfile(null);
   }, []);
 
   const fetchUserProfile = useCallback(async (address: string): Promise<UserProfile | null> => {
@@ -362,6 +439,90 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
     }
   }, [api, walletState.address]);
 
+  const isContactApproved = useCallback(async (contactAddress: string): Promise<boolean> => {
+    if (!api || !walletState.address) return false;
+
+    try {
+      const approved = await api.query.messaging?.approvedContacts?.(
+        walletState.address,
+        contactAddress
+      );
+      return approved?.toHuman() === true;
+    } catch (error) {
+      console.error("Failed to check contact approval:", error);
+      return false;
+    }
+  }, [api, walletState.address]);
+
+  // Fetch contacts ONLY from blockchain - no localStorage
+  const fetchContacts = useCallback(async () => {
+    if (!api || !walletState.address) {
+      setContacts([]);
+      return;
+    }
+
+    setContactsLoading(true);
+    
+    try {
+      // Query all approved contacts entries for current user from blockchain
+      const entries = await api.query.messaging?.approvedContacts?.entries(walletState.address);
+      
+      if (!entries || entries.length === 0) {
+        setContacts([]);
+        setContactsLoading(false);
+        return;
+      }
+
+      const fetchedContacts: Contact[] = [];
+
+      for (const [key, value] of entries) {
+        // value.isTrue indicates approval
+        if (value && value.toHuman() === true) {
+          // Extract contact address from storage key
+          // key.args[1] is the contact address
+          const contactAddress = key.args[1].toString();
+          
+          // Check if they approved us back
+          const theirApproval = await api.query.messaging?.approvedContacts?.(
+            contactAddress,
+            walletState.address
+          );
+          
+          const approvedByThem = theirApproval?.toHuman() === true;
+          
+          fetchedContacts.push({
+            address: contactAddress,
+            status: approvedByThem ? "active" : "pending",
+            addedAt: Date.now(),
+            approvedByMe: true,
+            approvedByThem,
+          });
+        }
+      }
+
+      setContacts(fetchedContacts);
+    } catch (error) {
+      console.error("Failed to fetch contacts from blockchain:", error);
+      toast({
+        title: "Failed to fetch contacts",
+        description: "Could not load contacts from blockchain. Please try again.",
+        variant: "destructive",
+      });
+      setContacts([]);
+    } finally {
+      setContactsLoading(false);
+    }
+  }, [api, walletState.address]);
+
+  // Manual refresh function
+  const refreshContacts = useCallback(async () => {
+    await fetchContacts();
+    toast({
+      title: "Contacts refreshed",
+      description: "Contact list synced with blockchain",
+    });
+  }, [fetchContacts]);
+
   const approveContact = useCallback(async (contactAddress: string) => {
     if (!api || !walletState.address) {
       throw new Error("API or wallet not connected");
@@ -398,7 +559,7 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
 
       toast({
         title: "Contact approved",
-        description: "Contact has been approved successfully",
+        description: "Contact has been approved on blockchain",
       });
     } catch (error) {
       console.error("Failed to approve contact:", error);
@@ -407,27 +568,11 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
   }, [api, walletState.address]);
 
   const addContact = useCallback(async (address: string) => {
+    // First approve on blockchain
     await approveContact(address);
-    
-    setContacts((prev) => {
-      const existing = prev.find((c) => c.address === address);
-      if (existing) {
-        return prev.map((c) =>
-          c.address === address ? { ...c, approvedByMe: true } : c
-        );
-      }
-      return [
-        ...prev,
-        {
-          address,
-          status: "pending",
-          addedAt: Date.now(),
-          approvedByMe: true,
-          approvedByThem: false,
-        },
-      ];
-    });
-  }, [approveContact]);
+    // Then re-fetch contacts from blockchain to update UI
+    await fetchContacts();
+  }, [approveContact, fetchContacts]);
 
   const removeContact = useCallback(async (contactAddress: string) => {
     if (!api || !walletState.address) {
@@ -463,72 +608,18 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
         ).catch(reject);
       });
 
-      setContacts((prev) => prev.filter((c) => c.address !== contactAddress));
+      // Re-fetch contacts from blockchain after removal
+      await fetchContacts();
 
       toast({
         title: "Contact removed",
-        description: "Contact has been removed successfully",
+        description: "Contact has been removed from blockchain",
       });
     } catch (error) {
       console.error("Failed to remove contact:", error);
       throw error;
     }
-  }, [api, walletState.address]);
-
-  const isContactApproved = useCallback(async (contactAddress: string): Promise<boolean> => {
-    if (!api || !walletState.address) return false;
-
-    try {
-      const approved = await api.query.messaging?.approvedContacts?.(
-        walletState.address,
-        contactAddress
-      );
-      return approved?.toHuman() === true;
-    } catch (error) {
-      console.error("Failed to check contact approval:", error);
-      return false;
-    }
-  }, [api, walletState.address]);
-
-  const fetchContacts = useCallback(async () => {
-    // For MVP, contacts are stored locally
-    const stored = localStorage.getItem("messaging_contacts");
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        // Check on-chain approval status for each contact
-        const updatedContacts = await Promise.all(
-          parsed.map(async (contact: Contact) => {
-            if (api && walletState.address) {
-              const myApproval = await isContactApproved(contact.address);
-              // Check if they approved me
-              const theirApproval = await api.query.messaging?.approvedContacts?.(
-                contact.address,
-                walletState.address
-              );
-              return {
-                ...contact,
-                approvedByMe: myApproval,
-                approvedByThem: theirApproval?.toHuman() === true,
-                status: myApproval && theirApproval?.toHuman() === true ? "active" : "pending",
-              };
-            }
-            return contact;
-          })
-        );
-        setContacts(updatedContacts);
-      } catch (e) {
-        console.error("Failed to parse stored contacts:", e);
-      }
-    }
-  }, [api, walletState.address, isContactApproved]);
-
-  // Save contacts to localStorage
-  useEffect(() => {
-    if (contacts.length > 0) {
-      localStorage.setItem("messaging_contacts", JSON.stringify(contacts));
-    }
-  }, [contacts]);
+  }, [api, walletState.address, fetchContacts]);
 
   const sendMessageHash = useCallback(async (recipient: string, hash: string): Promise<string> => {
     if (!api || !walletState.address) {
@@ -611,7 +702,7 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  // Check user profile when wallet connects
+  // Fetch user profile and contacts when wallet connects or account changes
   useEffect(() => {
     if (walletState.address && api) {
       fetchUserProfile(walletState.address).then(setUserProfile);
@@ -626,6 +717,7 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
     userProfile,
     contacts,
     messages,
+    contactsLoading,
     connectWallet,
     disconnectWallet,
     selectAccount,
@@ -636,6 +728,7 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
     approveContact,
     removeContact,
     fetchContacts,
+    refreshContacts,
     isContactApproved,
     sendMessageHash,
     fetchMessageHashes,
