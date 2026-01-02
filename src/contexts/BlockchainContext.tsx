@@ -20,6 +20,7 @@ interface BlockchainContextType {
   
   // Profile functions
   registerProfile: (publicKey: Uint8Array) => Promise<void>;
+  updateProfile: (publicKey: Uint8Array) => Promise<string>;
   fetchUserProfile: (address: string) => Promise<UserProfile | null>;
   
   // Contact functions
@@ -309,6 +310,58 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
     }
   }, [api, walletState.address]);
 
+  const updateProfile = useCallback(async (publicKey: Uint8Array): Promise<string> => {
+    if (!api || !walletState.address) {
+      throw new Error("API or wallet not connected");
+    }
+
+    try {
+      const injector = await web3FromAddress(walletState.address);
+      
+      const tx = api.tx.messaging?.updateProfile?.(Array.from(publicKey));
+      
+      if (!tx) {
+        throw new Error("Messaging pallet not found");
+      }
+
+      const txHash = await new Promise<string>((resolve, reject) => {
+        tx.signAndSend(
+          walletState.address!,
+          { signer: injector.signer },
+          ({ status, dispatchError }) => {
+            if (status.isInBlock) {
+              toast({
+                title: "Transaction included",
+                description: `Included in block ${status.asInBlock.toHex()}`,
+              });
+            } else if (status.isFinalized) {
+              if (dispatchError) {
+                if (dispatchError.isModule) {
+                  const decoded = api.registry.findMetaError(dispatchError.asModule);
+                  reject(new Error(`${decoded.section}.${decoded.name}`));
+                } else {
+                  reject(new Error(dispatchError.toString()));
+                }
+              } else {
+                setUserProfile({
+                  address: walletState.address!,
+                  publicKey: Array.from(publicKey).map((b) => b.toString(16).padStart(2, "0")).join(""),
+                  bondPaid: true,
+                });
+                resolve(status.asFinalized.toHex());
+              }
+            }
+          }
+        ).catch(reject);
+      });
+
+      return txHash;
+    } catch (error) {
+      console.error("Failed to update profile:", error);
+      throw error;
+    }
+  }, [api, walletState.address]);
+
   const approveContact = useCallback(async (contactAddress: string) => {
     if (!api || !walletState.address) {
       throw new Error("API or wallet not connected");
@@ -577,6 +630,7 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
     disconnectWallet,
     selectAccount,
     registerProfile,
+    updateProfile,
     fetchUserProfile,
     addContact,
     approveContact,
