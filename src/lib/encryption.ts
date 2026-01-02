@@ -1,5 +1,6 @@
 import nacl from "tweetnacl";
 import { encodeBase64, decodeBase64, encodeUTF8, decodeUTF8 } from "tweetnacl-util";
+import { sha256 } from "js-sha256";
 
 export interface KeyPair {
   publicKey: Uint8Array;
@@ -28,12 +29,20 @@ export function keyToHex(key: Uint8Array): string {
 }
 
 /**
+ * Remove 0x prefix from hex string if present
+ */
+export function removeHexPrefix(hex: string): string {
+  return hex.startsWith("0x") ? hex.slice(2) : hex;
+}
+
+/**
  * Convert hex string back to Uint8Array
  */
 export function hexToKey(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < hex.length; i += 2) {
-    bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+  const cleanHex = removeHexPrefix(hex);
+  const bytes = new Uint8Array(cleanHex.length / 2);
+  for (let i = 0; i < cleanHex.length; i += 2) {
+    bytes[i / 2] = parseInt(cleanHex.substr(i, 2), 16);
   }
   return bytes;
 }
@@ -102,12 +111,9 @@ export function decryptMessage(
 /**
  * Hash encrypted message data using SHA-256
  */
-export async function hashMessage(data: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const dataBuffer = encoder.encode(data);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", dataBuffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+export function hashMessage(data: string): string {
+  const hash = sha256(data);
+  return "0x" + hash;
 }
 
 /**
@@ -123,8 +129,7 @@ export function publicKeyToVec(publicKey: Uint8Array): number[] {
 export function verifyHash(
   encryptedData: EncryptedMessage,
   expectedHash: string
-): Promise<boolean> {
-  return hashMessage(encryptedData.ciphertext + encryptedData.nonce).then(
-    (computedHash) => computedHash === expectedHash
-  );
+): boolean {
+  const computedHash = hashMessage(encryptedData.ciphertext + encryptedData.nonce);
+  return computedHash === expectedHash;
 }
