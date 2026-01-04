@@ -110,13 +110,15 @@ export function ChatInterface({ contactAddress, onBack }: ChatInterfaceProps) {
         content = "[Encrypted message]";
       }
       
+      const isMine = m.sender === walletState.address;
+      
       return {
         id: m.id,
         content,
         sender: m.sender,
         recipient: m.recipient,
         timestamp: m.timestamp,
-        isMine: m.sender === walletState.address,
+        isMine,
         status: m.status,
         encrypted: true,
         hash: m.hash,
@@ -125,6 +127,8 @@ export function ChatInterface({ contactAddress, onBack }: ChatInterfaceProps) {
         expired: m.expired ?? false,
         verifiedAt: m.verifiedAt,
         conversationId: m.conversationId,
+        // Only recipients can verify messages (not the sender)
+        canVerify: !isMine && !m.expired && m.status !== "sending" && m.status !== "failed",
       };
     })
     .sort((a, b) => a.timestamp - b.timestamp);
@@ -171,8 +175,9 @@ export function ChatInterface({ contactAddress, onBack }: ChatInterfaceProps) {
         status: "sending",
         decryptedContent: content,
         direction: "sent",
-        verified: false,
+        verified: true,  // Sender's messages are auto-verified
         expired: false,
+        canVerify: false, // Sender cannot verify their own messages
       };
       
       addStoredMessage(storedMessage);

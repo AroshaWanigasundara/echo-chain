@@ -33,6 +33,7 @@ export interface StoredMessage {
   verified: boolean;
   expired: boolean;
   verifiedAt?: number;
+  canVerify: boolean; // Only recipients can verify messages
 }
 
 export interface ChatMessage {
@@ -50,6 +51,7 @@ export interface ChatMessage {
   expired: boolean;
   verifiedAt?: number;
   conversationId?: string;
+  canVerify: boolean; // Only recipients can verify messages
 }
 
 export interface BlockchainState {

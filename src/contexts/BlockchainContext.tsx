@@ -196,18 +196,19 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
     };
   }, [api, walletState.address]);
 
-  // Handle account switching - clear previous user's state
+  // Handle account switching - clear React state only, NOT localStorage
   useEffect(() => {
     const currentAddress = walletState.address;
     const previousAddress = previousAddressRef.current;
     
     if (previousAddress && currentAddress && previousAddress !== currentAddress) {
-      // Account switched - clear previous user's state
+      // Account switched - clear React state ONLY (not localStorage)
       console.log(`Account switched from ${truncateKey(previousAddress)} to ${truncateKey(currentAddress)}`);
       
-      // Clear React state
+      // Clear React state ONLY - do NOT clear localStorage
+      // Message history for each user is preserved in localStorage with key messageHistory_{address}
       setContacts([]);
-      setMessages([]);
+      setMessages([]); // Clear state - will be reloaded from new user's localStorage
       setUserProfile(null);
       
       toast({

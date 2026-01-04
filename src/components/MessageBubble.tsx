@@ -54,6 +54,10 @@ export function MessageBubble({
     if (message.verified) {
       return <ShieldCheck className="h-3.5 w-3.5 text-success" />;
     }
+    // For sent messages, show auto-verified status
+    if (message.isMine) {
+      return <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />;
+    }
     return <Shield className="h-3.5 w-3.5 text-muted-foreground" />;
   };
 
@@ -61,6 +65,7 @@ export function MessageBubble({
     if (isVerifying) return "Verifying...";
     if (message.expired) return "Expired - Cannot verify";
     if (message.verified) return "Verified on blockchain";
+    if (message.isMine) return "Sent by you (auto-verified)";
     return "Click to verify";
   };
 
@@ -103,7 +108,9 @@ export function MessageBubble({
   };
 
   const expiryInfo = getExpiryInfo();
-  const canVerify = !message.expired && message.status !== "sending" && message.status !== "failed";
+  
+  // Only recipients can verify messages (canVerify from the message data)
+  const canVerify = message.canVerify && !message.expired && message.status !== "sending" && message.status !== "failed";
 
   const handleClick = () => {
     if (canVerify && onVerifyClick) {
