@@ -1,11 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from "react";
 import { ApiPromise, WsProvider } from "@polkadot/api";
 import { web3Enable, web3Accounts, web3FromAddress } from "@polkadot/extension-dapp";
-import { RPC_ENDPOINT, APP_NAME, SPAM_BOND } from "@/lib/constants";
-import { BlockchainState, WalletState, UserProfile, Contact, StoredMessage } from "@/lib/types";
+import { RPC_ENDPOINT, APP_NAME, SPAM_BOND, MESSAGE_HASH_EXPIRY_BLOCKS, BLOCKS_PER_DAY, BLOCKS_PER_HOUR } from "@/lib/constants";
+import { BlockchainState, WalletState, UserProfile, Contact, StoredMessage, MessageVerificationResult } from "@/lib/types";
 import { toast } from "@/hooks/use-toast";
 import { getUserStorageKey, USER_STORAGE_KEYS } from "@/lib/storage";
-import { truncateKey } from "@/lib/encryption";
+import { truncateKey, hashMessage } from "@/lib/encryption";
 
 interface BlockchainContextType {
   api: ApiPromise | null;
@@ -35,10 +35,17 @@ interface BlockchainContextType {
   isContactApproved: (address: string) => Promise<boolean>;
   
   // Message functions
-  sendMessageHash: (recipient: string, hash: string) => Promise<string>;
+  sendMessageHash: (recipient: string, hash: string) => Promise<{ messageId: string; blockNumber: number }>;
   fetchMessageHashes: () => Promise<void>;
   addStoredMessage: (message: StoredMessage) => void;
-  updateMessageStatus: (id: string, status: StoredMessage["status"], blockNumber?: number) => void;
+  updateMessageStatus: (
+    id: string, 
+    status: StoredMessage["status"], 
+    blockNumber?: number, 
+    newId?: string,
+    updates?: Partial<StoredMessage>
+  ) => void;
+  verifyMessageOnChain: (messageId: string, localHash: string) => Promise<MessageVerificationResult>;
 }
 
 const BlockchainContext = createContext<BlockchainContextType | null>(null);
@@ -621,7 +628,7 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
     }
   }, [api, walletState.address, fetchContacts]);
 
-  const sendMessageHash = useCallback(async (recipient: string, hash: string): Promise<string> => {
+  const sendMessageHash = useCallback(async (recipient: string, hash: string): Promise<{ messageId: string; blockNumber: number }> => {
     if (!api || !walletState.address) {
       throw new Error("API or wallet not connected");
     }
@@ -634,11 +641,11 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
         throw new Error("Messaging pallet not found");
       }
 
-      const messageId = await new Promise<string>((resolve, reject) => {
+      const result = await new Promise<{ messageId: string; blockNumber: number }>((resolve, reject) => {
         tx.signAndSend(
           walletState.address!,
           { signer: injector.signer },
-          ({ status, dispatchError, events }) => {
+          async ({ status, dispatchError, events }) => {
             if (status.isFinalized) {
               if (dispatchError) {
                 if (dispatchError.isModule) {
@@ -653,14 +660,20 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
                   e.event.section === "messaging" && e.event.method === "MessageHashSent"
                 );
                 const msgId = messageEvent?.event.data?.[0]?.toString() || `msg_${Date.now()}`;
-                resolve(msgId);
+                
+                // Get block number
+                const blockHash = status.asFinalized;
+                const block = await api.rpc.chain.getBlock(blockHash);
+                const blockNum = block.block.header.number.toNumber();
+                
+                resolve({ messageId: msgId, blockNumber: blockNum });
               }
             }
           }
         ).catch(reject);
       });
 
-      return messageId;
+      return result;
     } catch (error) {
       console.error("Failed to send message hash:", error);
       throw error;
@@ -694,13 +707,99 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
     setMessages((prev) => [...prev, message]);
   }, []);
 
-  const updateMessageStatus = useCallback((id: string, status: StoredMessage["status"], blockNumber?: number) => {
+  const updateMessageStatus = useCallback((
+    id: string, 
+    status: StoredMessage["status"], 
+    blockNumber?: number,
+    newId?: string,
+    updates?: Partial<StoredMessage>
+  ) => {
     setMessages((prev) =>
-      prev.map((m) =>
-        m.id === id ? { ...m, status, blockNumber: blockNumber ?? m.blockNumber } : m
-      )
+      prev.map((m) => {
+        if (m.id === id) {
+          return { 
+            ...m, 
+            ...(updates || {}),
+            id: newId ?? m.id,
+            status, 
+            blockNumber: blockNumber ?? m.blockNumber,
+          };
+        }
+        return m;
+      })
     );
   }, []);
+
+  // Verify a message hash against blockchain
+  const verifyMessageOnChain = useCallback(async (
+    messageId: string, 
+    localHash: string
+  ): Promise<MessageVerificationResult> => {
+    if (!api) {
+      return { verified: false, expired: false, error: "API not connected" };
+    }
+
+    try {
+      const currentBlock = blockchainState.blockNumber;
+      
+      // Query message hash from blockchain
+      const storedData = await api.query.messaging?.messageHashes?.(messageId);
+      
+      if (!storedData || storedData.isEmpty) {
+        return { verified: false, expired: false, error: "Message not found on blockchain" };
+      }
+
+      // Parse stored data - format: (Hash, BlockNumber, Sender, Recipient)
+      const data = storedData.toHuman() as [string, string, string, string] | null;
+      
+      if (!data) {
+        return { verified: false, expired: false, error: "Invalid blockchain data" };
+      }
+
+      const [blockchainHash, blockNumStr] = data;
+      const blockNumber = parseInt(blockNumStr.replace(/,/g, ""), 10);
+      
+      // Check expiry
+      const expiryBlock = blockNumber + MESSAGE_HASH_EXPIRY_BLOCKS;
+      const blocksRemaining = expiryBlock - currentBlock;
+      const daysRemaining = Math.floor(blocksRemaining / BLOCKS_PER_DAY);
+      
+      if (blocksRemaining <= 0) {
+        return { 
+          verified: false, 
+          expired: true, 
+          blockchainHash,
+          computedHash: localHash,
+          blockNumber,
+          blocksRemaining: 0,
+          daysRemaining: 0,
+        };
+      }
+
+      // Compare hashes
+      const verified = blockchainHash.toLowerCase() === localHash.toLowerCase() ||
+                       blockchainHash === localHash ||
+                       blockchainHash === `0x${localHash}` ||
+                       `0x${blockchainHash}` === localHash;
+
+      return {
+        verified,
+        expired: false,
+        blockchainHash,
+        computedHash: localHash,
+        blockNumber,
+        blocksRemaining,
+        daysRemaining,
+      };
+    } catch (error) {
+      console.error("Failed to verify message on chain:", error);
+      return { 
+        verified: false, 
+        expired: false, 
+        error: error instanceof Error ? error.message : "Verification failed" 
+      };
+    }
+  }, [api, blockchainState.blockNumber]);
 
   // Fetch user profile and contacts when wallet connects or account changes
   useEffect(() => {
@@ -734,6 +833,7 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
     fetchMessageHashes,
     addStoredMessage,
     updateMessageStatus,
+    verifyMessageOnChain,
   };
 
   return (

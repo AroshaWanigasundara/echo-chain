@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Lock, ArrowLeft, RefreshCw, Loader2 } from "lucide-react";
+import { Send, Lock, ArrowLeft, RefreshCw, Loader2, Filter, ShieldCheck } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,30 +7,52 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useBlockchain } from "@/contexts/BlockchainContext";
 import { useEncryption } from "@/contexts/EncryptionContext";
 import { MessageBubble } from "@/components/MessageBubble";
+import { VerificationModal } from "@/components/VerificationModal";
 import { truncateKey } from "@/lib/encryption";
-import { ChatMessage, StoredMessage } from "@/lib/types";
+import { ChatMessage, StoredMessage, MessageVerificationResult } from "@/lib/types";
 import { toast } from "@/hooks/use-toast";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { MESSAGE_HASH_EXPIRY_BLOCKS, BLOCKS_PER_DAY, BLOCKS_PER_HOUR } from "@/lib/constants";
 
 interface ChatInterfaceProps {
   contactAddress: string | null;
   onBack: () => void;
 }
 
+type MessageFilter = "all" | "verified" | "unverified" | "expired";
+
+// Helper to create conversation ID
+function createConversationId(addr1: string, addr2: string): string {
+  return [addr1, addr2].sort().join("_");
+}
+
 export function ChatInterface({ contactAddress, onBack }: ChatInterfaceProps) {
   const { 
     walletState, 
+    blockchainState,
     messages, 
     sendMessageHash, 
     addStoredMessage, 
     updateMessageStatus,
-    fetchUserProfile 
+    fetchUserProfile,
+    verifyMessageOnChain
   } = useBlockchain();
-  const { encrypt, decrypt, hash, publicKey } = useEncryption();
+  const { encrypt, hash, publicKey } = useEncryption();
   
   const [messageInput, setMessageInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [recipientPublicKey, setRecipientPublicKey] = useState<string | null>(null);
   const [isLoadingRecipient, setIsLoadingRecipient] = useState(false);
+  const [filter, setFilter] = useState<MessageFilter>("all");
+  const [selectedMessage, setSelectedMessage] = useState<ChatMessage | null>(null);
+  const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
+  const [verifyingMessageId, setVerifyingMessageId] = useState<string | null>(null);
+  const [isVerifyingAll, setIsVerifyingAll] = useState(false);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -56,24 +78,36 @@ export function ChatInterface({ contactAddress, onBack }: ChatInterfaceProps) {
       .finally(() => setIsLoadingRecipient(false));
   }, [contactAddress, fetchUserProfile]);
 
+  // Get conversation ID
+  const conversationId = walletState.address && contactAddress 
+    ? createConversationId(walletState.address, contactAddress)
+    : null;
+
   // Filter messages for this conversation
   const conversationMessages: ChatMessage[] = messages
-    .filter((m) => 
-      (m.sender === walletState.address && m.recipient === contactAddress) ||
-      (m.sender === contactAddress && m.recipient === walletState.address)
-    )
+    .filter((m) => {
+      // Filter by conversation
+      const msgConversationId = m.conversationId || createConversationId(m.sender, m.recipient);
+      if (msgConversationId !== conversationId) return false;
+      
+      // Apply filter
+      switch (filter) {
+        case "verified":
+          return m.verified === true;
+        case "unverified":
+          return m.verified !== true && m.expired !== true;
+        case "expired":
+          return m.expired === true;
+        default:
+          return true;
+      }
+    })
     .map((m) => {
       let content = m.decryptedContent || "";
       
       // Try to decrypt if we haven't already
       if (!content && m.encryptedData && m.sender !== walletState.address) {
-        try {
-          // Need sender's public key to decrypt
-          // For now, we'll show encrypted indicator
-          content = "[Encrypted message]";
-        } catch {
-          content = "[Decryption failed]";
-        }
+        content = "[Encrypted message]";
       }
       
       return {
@@ -86,6 +120,11 @@ export function ChatInterface({ contactAddress, onBack }: ChatInterfaceProps) {
         status: m.status,
         encrypted: true,
         hash: m.hash,
+        blockNumber: m.blockNumber,
+        verified: m.verified ?? false,
+        expired: m.expired ?? false,
+        verifiedAt: m.verifiedAt,
+        conversationId: m.conversationId,
       };
     })
     .sort((a, b) => a.timestamp - b.timestamp);
@@ -116,31 +155,38 @@ export function ChatInterface({ contactAddress, onBack }: ChatInterfaceProps) {
       // Hash the encrypted data
       const messageHash = await hash(encryptedData.ciphertext + encryptedData.nonce);
       
+      // Create conversation ID
+      const convId = createConversationId(walletState.address, contactAddress);
+      
       // Create local message first
       const tempId = `temp_${Date.now()}`;
       const storedMessage: StoredMessage = {
         id: tempId,
+        conversationId: convId,
         sender: walletState.address,
         recipient: contactAddress,
         encryptedData,
         hash: messageHash,
         timestamp: Date.now(),
         status: "sending",
-        decryptedContent: content, // Store decrypted for sender
+        decryptedContent: content,
+        direction: "sent",
+        verified: false,
+        expired: false,
       };
       
       addStoredMessage(storedMessage);
       
       // Send hash to blockchain
-      const blockchainId = await sendMessageHash(contactAddress, messageHash);
+      const { messageId, blockNumber } = await sendMessageHash(contactAddress, messageHash);
       
       // Update message with blockchain ID and status
-      updateMessageStatus(tempId, "sent");
+      updateMessageStatus(tempId, "sent", blockNumber, messageId);
       
-      // Simulate verification after a delay
-      setTimeout(() => {
-        updateMessageStatus(tempId, "verified");
-      }, 3000);
+      toast({
+        title: "Message sent",
+        description: "Hash stored on blockchain",
+      });
       
     } catch (error) {
       console.error("Failed to send message:", error);
@@ -149,10 +195,90 @@ export function ChatInterface({ contactAddress, onBack }: ChatInterfaceProps) {
         description: error instanceof Error ? error.message : "Message could not be sent",
         variant: "destructive",
       });
+      updateMessageStatus(`temp_${Date.now() - 1}`, "failed");
     } finally {
       setIsSending(false);
     }
   }, [messageInput, contactAddress, walletState.address, recipientPublicKey, encrypt, hash, addStoredMessage, sendMessageHash, updateMessageStatus]);
+
+  const handleVerifyMessage = async (message: ChatMessage): Promise<MessageVerificationResult> => {
+    if (!verifyMessageOnChain) {
+      return { verified: false, expired: false, error: "Verification not available" };
+    }
+    
+    setVerifyingMessageId(message.id);
+    
+    try {
+      const result = await verifyMessageOnChain(message.id, message.hash || "");
+      
+      // Update message status in storage
+      if (result.verified) {
+        updateMessageStatus(message.id, "verified", undefined, undefined, {
+          verified: true,
+          expired: result.expired,
+          verifiedAt: Date.now(),
+        });
+      } else if (result.expired) {
+        updateMessageStatus(message.id, message.status, undefined, undefined, {
+          verified: false,
+          expired: true,
+        });
+      }
+      
+      return result;
+    } finally {
+      setVerifyingMessageId(null);
+    }
+  };
+
+  const handleMessageClick = (message: ChatMessage) => {
+    setSelectedMessage(message);
+    setIsVerificationModalOpen(true);
+  };
+
+  const handleVerifyAll = async () => {
+    const unverifiedMessages = conversationMessages.filter(
+      m => !m.verified && !m.expired && m.status !== "sending" && m.status !== "failed"
+    );
+    
+    if (unverifiedMessages.length === 0) {
+      toast({
+        title: "No messages to verify",
+        description: "All messages are already verified or expired",
+      });
+      return;
+    }
+    
+    setIsVerifyingAll(true);
+    let verified = 0;
+    let failed = 0;
+    let expired = 0;
+    
+    for (const msg of unverifiedMessages) {
+      try {
+        const result = await handleVerifyMessage(msg);
+        if (result.verified) verified++;
+        else if (result.expired) expired++;
+        else failed++;
+      } catch {
+        failed++;
+      }
+    }
+    
+    setIsVerifyingAll(false);
+    
+    toast({
+      title: "Batch verification complete",
+      description: `${verified} verified, ${expired} expired, ${failed} failed`,
+    });
+  };
+
+  const filterLabels: Record<MessageFilter, string> = {
+    all: "All Messages",
+    verified: "Verified Only",
+    unverified: "Unverified",
+    expired: "Expired",
+  };
 
   if (!contactAddress) {
     return (
@@ -193,6 +319,42 @@ export function ChatInterface({ contactAddress, onBack }: ChatInterfaceProps) {
           </div>
         </div>
         
+        {/* Filter Dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="shrink-0">
+              <Filter className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {(Object.keys(filterLabels) as MessageFilter[]).map((f) => (
+              <DropdownMenuItem
+                key={f}
+                onClick={() => setFilter(f)}
+                className={filter === f ? "bg-primary/10" : ""}
+              >
+                {filterLabels[f]}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        
+        {/* Verify All Button */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0"
+          onClick={handleVerifyAll}
+          disabled={isVerifyingAll}
+          title="Verify all messages"
+        >
+          {isVerifyingAll ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <ShieldCheck className="h-4 w-4" />
+          )}
+        </Button>
+        
         {isLoadingRecipient ? (
           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
         ) : recipientPublicKey ? (
@@ -204,7 +366,7 @@ export function ChatInterface({ contactAddress, onBack }: ChatInterfaceProps) {
 
       {/* Messages Area */}
       <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-        <div className="space-y-3">
+        <div className="space-y-6">
           <AnimatePresence mode="popLayout">
             {conversationMessages.length === 0 ? (
               <motion.div
@@ -213,12 +375,23 @@ export function ChatInterface({ contactAddress, onBack }: ChatInterfaceProps) {
                 className="text-center py-12 text-muted-foreground"
               >
                 <Lock className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                <p className="text-sm">Start a secure conversation</p>
+                <p className="text-sm">
+                  {filter !== "all" 
+                    ? `No ${filterLabels[filter].toLowerCase()} messages`
+                    : "Start a secure conversation"
+                  }
+                </p>
                 <p className="text-xs mt-1">Messages are encrypted end-to-end</p>
               </motion.div>
             ) : (
               conversationMessages.map((message) => (
-                <MessageBubble key={message.id} message={message} />
+                <MessageBubble 
+                  key={message.id} 
+                  message={message}
+                  currentBlockNumber={blockchainState.blockNumber}
+                  onVerifyClick={handleMessageClick}
+                  isVerifying={verifyingMessageId === message.id}
+                />
               ))
             )}
           </AnimatePresence>
@@ -257,6 +430,17 @@ export function ChatInterface({ contactAddress, onBack }: ChatInterfaceProps) {
           Messages are encrypted and hashes stored on blockchain for verification
         </p>
       </div>
+
+      {/* Verification Modal */}
+      <VerificationModal
+        message={selectedMessage}
+        isOpen={isVerificationModalOpen}
+        onClose={() => {
+          setIsVerificationModalOpen(false);
+          setSelectedMessage(null);
+        }}
+        onVerify={handleVerifyMessage}
+      />
     </motion.div>
   );
 }
