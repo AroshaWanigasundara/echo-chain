@@ -4,6 +4,12 @@ export const SPAM_BOND = BigInt("10000000000000"); // 10 UNIT
 export const MAX_CONTACTS = 1000;
 export const MESSAGE_HASH_EXPIRY_DAYS = 7;
 
+// Block calculations (assuming ~6 second blocks)
+export const BLOCKS_PER_MINUTE = 10;
+export const BLOCKS_PER_HOUR = BLOCKS_PER_MINUTE * 60;
+export const BLOCKS_PER_DAY = BLOCKS_PER_HOUR * 24;
+export const MESSAGE_HASH_EXPIRY_BLOCKS = MESSAGE_HASH_EXPIRY_DAYS * BLOCKS_PER_DAY;
+
 // App info
 export const APP_NAME = "SecureChain Messenger";
 export const APP_VERSION = "1.0.0";
