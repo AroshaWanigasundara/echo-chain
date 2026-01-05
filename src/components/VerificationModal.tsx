@@ -155,11 +155,11 @@ export function VerificationModal({
             )}
 
             {result?.blockchainHash && (
-              <div className="flex items-start gap-3 p-3 rounded-lg bg-background/50 border border-border/50">
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-background/50 border border-border/50 overflow-hidden">
                 <Hash className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 overflow-hidden">
                   <p className="text-muted-foreground text-xs">Blockchain Hash</p>
-                  <p className="font-mono text-xs truncate">{result.blockchainHash}</p>
+                  <p className="font-mono text-xs break-all">{result.blockchainHash}</p>
                 </div>
                 <Button
                   variant="ghost"
@@ -173,11 +173,11 @@ export function VerificationModal({
             )}
 
             {result?.computedHash && (
-              <div className="flex items-start gap-3 p-3 rounded-lg bg-background/50 border border-border/50">
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-background/50 border border-border/50 overflow-hidden">
                 <Hash className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 overflow-hidden">
                   <p className="text-muted-foreground text-xs">Computed Hash</p>
-                  <p className="font-mono text-xs truncate">{result.computedHash}</p>
+                  <p className="font-mono text-xs break-all">{result.computedHash}</p>
                 </div>
                 <Button
                   variant="ghost"
