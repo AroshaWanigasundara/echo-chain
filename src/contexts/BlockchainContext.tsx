@@ -706,7 +706,14 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
       messages.map(async (msg) => {
         if (msg.status !== "verified" && msg.id) {
           try {
-            const stored = await api.query.messaging?.messageHashes?.(msg.id);
+            // Convert messageId to number for blockchain query
+            const messageIdNum = parseInt(msg.id, 10);
+            if (isNaN(messageIdNum)) {
+              console.warn("Invalid message ID format:", msg.id);
+              return msg;
+            }
+            
+            const stored = await api.query.messaging?.messageHashes?.(messageIdNum);
             if (stored && !stored.isEmpty) {
               return { ...msg, status: "verified" as const };
             }
@@ -760,8 +767,23 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
     try {
       const currentBlock = blockchainState.blockNumber;
       
-      // Query message hash from blockchain
-      const storedData = await api.query.messaging?.messageHashes?.(messageId);
+      // Convert messageId to number for blockchain query (FIX for createType error)
+      const messageIdNum = parseInt(messageId, 10);
+      
+      console.log("=== VERIFICATION DEBUG ===");
+      console.log("Message ID (raw):", messageId);
+      console.log("Message ID (parsed):", messageIdNum);
+      console.log("Message ID (isNaN):", isNaN(messageIdNum));
+      
+      if (isNaN(messageIdNum)) {
+        return { verified: false, expired: false, error: "Invalid message ID format" };
+      }
+      
+      // Query message hash from blockchain with numeric ID
+      const storedData = await api.query.messaging?.messageHashes?.(messageIdNum);
+      
+      console.log("Blockchain query successful");
+      console.log("Data exists:", storedData && !storedData.isEmpty);
       
       if (!storedData || storedData.isEmpty) {
         return { verified: false, expired: false, error: "Message not found on blockchain" };
@@ -769,6 +791,8 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
 
       // Parse stored data - format: (Hash, BlockNumber, Sender, Recipient)
       const data = storedData.toHuman() as [string, string, string, string] | null;
+      
+      console.log("Unwrapped data:", data);
       
       if (!data) {
         return { verified: false, expired: false, error: "Invalid blockchain data" };
@@ -794,11 +818,15 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
         };
       }
 
-      // Compare hashes
-      const verified = blockchainHash.toLowerCase() === localHash.toLowerCase() ||
-                       blockchainHash === localHash ||
-                       blockchainHash === `0x${localHash}` ||
-                       `0x${blockchainHash}` === localHash;
+      // Compare hashes (normalize both to lowercase hex)
+      const normalizeHash = (h: string) => h.toLowerCase().replace(/^0x/, "");
+      const verified = normalizeHash(blockchainHash) === normalizeHash(localHash);
+
+      console.log("Hash comparison:", {
+        blockchainHash: normalizeHash(blockchainHash),
+        localHash: normalizeHash(localHash),
+        verified,
+      });
 
       return {
         verified,
@@ -811,10 +839,21 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
       };
     } catch (error) {
       console.error("Failed to verify message on chain:", error);
+      
+      // User-friendly error messages
+      const errorMsg = error instanceof Error ? error.message : "Verification failed";
+      let userMessage = errorMsg;
+      
+      if (errorMsg.includes("createType") || errorMsg.includes("Lookup")) {
+        userMessage = "Data format error. Please check message ID format.";
+      } else if (errorMsg.includes("Invalid character")) {
+        userMessage = "Invalid message ID. Please contact support.";
+      }
+      
       return { 
         verified: false, 
         expired: false, 
-        error: error instanceof Error ? error.message : "Verification failed" 
+        error: userMessage 
       };
     }
   }, [api, blockchainState.blockNumber]);
