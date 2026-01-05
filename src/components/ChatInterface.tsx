@@ -214,7 +214,8 @@ export function ChatInterface({ contactAddress, onBack }: ChatInterfaceProps) {
     setVerifyingMessageId(message.id);
     
     try {
-      const result = await verifyMessageOnChain(message.id, message.hash || "");
+      // Pass sender address for received messages (helps find message ID by hash)
+      const result = await verifyMessageOnChain(message.id, message.hash || "", message.sender);
       
       // Update message status in storage
       if (result.verified) {

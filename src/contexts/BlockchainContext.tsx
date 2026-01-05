@@ -45,7 +45,7 @@ interface BlockchainContextType {
     newId?: string,
     updates?: Partial<StoredMessage>
   ) => void;
-  verifyMessageOnChain: (messageId: string, localHash: string) => Promise<MessageVerificationResult>;
+  verifyMessageOnChain: (messageId: string, localHash: string, senderAddress?: string) => Promise<MessageVerificationResult>;
 }
 
 const BlockchainContext = createContext<BlockchainContextType | null>(null);
@@ -755,10 +755,52 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
+  // Helper function to find message ID by hash (for received messages)
+  const findMessageIdByHash = useCallback(async (
+    hash: string,
+    senderAddress: string
+  ): Promise<string | null> => {
+    if (!api) return null;
+
+    try {
+      // Query all message hashes from blockchain
+      const entries = await api.query.messaging?.messageHashes?.entries();
+      
+      if (!entries || entries.length === 0) {
+        return null;
+      }
+
+      // Normalize hash for comparison
+      const normalizeHash = (h: string) => h.toLowerCase().replace(/^0x/, "");
+      const targetHash = normalizeHash(hash);
+
+      // Search through all messages to find one that matches
+      for (const [key, value] of entries) {
+        const msgId = key.args[0].toString();
+        const data = value.toHuman() as [string, string, string, string] | null;
+        
+        if (data) {
+          const [blockchainHash, _blockNum, sender, _recipient] = data;
+          
+          // Check if hash matches and sender is the expected sender
+          if (normalizeHash(blockchainHash) === targetHash && sender === senderAddress) {
+            return msgId;
+          }
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error("Failed to find message ID by hash:", error);
+      return null;
+    }
+  }, [api]);
+
   // Verify a message hash against blockchain
   const verifyMessageOnChain = useCallback(async (
     messageId: string, 
-    localHash: string
+    localHash: string,
+    senderAddress?: string
   ): Promise<MessageVerificationResult> => {
     if (!api) {
       return { verified: false, expired: false, error: "API not connected" };
@@ -768,15 +810,42 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
       const currentBlock = blockchainState.blockNumber;
       
       // Convert messageId to number for blockchain query (FIX for createType error)
-      const messageIdNum = parseInt(messageId, 10);
+      let messageIdNum = parseInt(messageId, 10);
       
       console.log("=== VERIFICATION DEBUG ===");
       console.log("Message ID (raw):", messageId);
       console.log("Message ID (parsed):", messageIdNum);
       console.log("Message ID (isNaN):", isNaN(messageIdNum));
       
+      // If ID is invalid and we have sender address, try to find the message by hash
       if (isNaN(messageIdNum)) {
-        return { verified: false, expired: false, error: "Invalid message ID format" };
+        if (senderAddress) {
+          console.log("Attempting to find message ID by hash and sender...");
+          const foundId = await findMessageIdByHash(localHash, senderAddress);
+          
+          if (foundId) {
+            messageIdNum = parseInt(foundId, 10);
+            console.log("Found message ID by hash:", foundId);
+          } else {
+            return { 
+              verified: false, 
+              expired: false, 
+              error: "Message not found on blockchain. It may not have been confirmed yet." 
+            };
+          }
+        } else if (messageId.startsWith("temp_")) {
+          return { 
+            verified: false, 
+            expired: false, 
+            error: "Message not yet confirmed on blockchain. Please wait for confirmation." 
+          };
+        } else {
+          return { 
+            verified: false, 
+            expired: false, 
+            error: "Invalid message ID format. This message cannot be verified." 
+          };
+        }
       }
       
       // Query message hash from blockchain with numeric ID
