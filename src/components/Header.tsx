@@ -15,17 +15,17 @@ export function Header() {
       animate={{ opacity: 1, y: 0 }}
       className="sticky top-0 z-50 w-full border-b border-border/50 glass-strong"
     >
-      <div className="container flex h-16 items-center justify-between gap-4">
+      <div className="container flex h-14 sm:h-16 items-center justify-between gap-2 sm:gap-4 px-3 sm:px-6">
         {/* Logo */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <div className="relative">
             <div className="absolute inset-0 rounded-lg bg-primary/30 blur-md" />
-            <div className="relative flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Shield className="h-5 w-5" />
+            <div className="relative flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <Shield className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
           </div>
-          <div>
-            <h1 className="text-lg font-semibold tracking-tight gradient-text">
+          <div className="hidden xs:block sm:block">
+            <h1 className="text-base sm:text-lg font-semibold tracking-tight gradient-text">
               {APP_NAME}
             </h1>
             <ConnectionStatus />
@@ -33,12 +33,12 @@ export function Header() {
         </div>
 
         {/* Right side */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1 sm:gap-3">
           <Button
             variant="ghost"
             size="icon"
             onClick={toggleTheme}
-            className="h-9 w-9"
+            className="h-8 w-8 sm:h-9 sm:w-9"
           >
             <motion.div
               initial={false}

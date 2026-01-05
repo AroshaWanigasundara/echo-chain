@@ -161,18 +161,18 @@ export function ProfileCard() {
         <Card className="glass border-border/50 overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
           
-          <CardHeader className="relative">
+          <CardHeader className="relative p-4 sm:p-6">
             <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5 text-primary" />
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                <Shield className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 Profile
               </CardTitle>
               <Badge 
                 variant="outline" 
-                className={userProfile?.bondPaid 
+                className={`text-[10px] sm:text-xs ${userProfile?.bondPaid 
                   ? "border-success/50 text-success" 
                   : "border-muted-foreground/50 text-muted-foreground"
-                }
+                }`}
               >
                 {userProfile?.bondPaid ? (
                   <>
@@ -184,26 +184,26 @@ export function ProfileCard() {
                 )}
               </Badge>
             </div>
-            <CardDescription>
+            <CardDescription className="text-xs sm:text-sm">
               {userProfile?.bondPaid 
                 ? "Your profile is registered on-chain" 
                 : "Register to start secure messaging"}
             </CardDescription>
           </CardHeader>
           
-          <CardContent className="relative space-y-6">
+          <CardContent className="relative space-y-4 sm:space-y-6 p-4 sm:p-6 pt-0 sm:pt-0">
             {/* Connection Info */}
-            <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/30">
+            <div className="flex items-center justify-between p-2 sm:p-3 rounded-lg bg-secondary/30">
               <div className="flex items-center gap-2">
-                <Wallet className="h-4 w-4 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground">
+                <Wallet className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+                <span className="text-[10px] sm:text-xs text-muted-foreground">
                   {truncateKey(walletState.address || "")}
                 </span>
               </div>
               {walletState.balance && (
                 <div className="flex items-center gap-1">
-                  <Coins className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-mono font-medium">
+                  <Coins className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
+                  <span className="text-xs sm:text-sm font-mono font-medium">
                     {walletState.balance} UNIT
                   </span>
                 </div>
@@ -211,31 +211,31 @@ export function ProfileCard() {
             </div>
 
             {/* Key Management Section */}
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium flex items-center gap-2">
-                  <Key className="h-4 w-4 text-primary" />
+                <h3 className="text-xs sm:text-sm font-medium flex items-center gap-2">
+                  <Key className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
                   Encryption Keys
                 </h3>
                 {hasKeys && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-7 px-2 gap-1"
+                    className="h-6 sm:h-7 px-2 gap-1"
                     onClick={handleExportKeys}
                   >
                     <Download className="h-3 w-3" />
-                    <span className="text-xs">Export</span>
+                    <span className="text-[10px] sm:text-xs">Export</span>
                   </Button>
                 )}
               </div>
 
               {/* Key Action Buttons */}
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <Button
                   onClick={handleGenerateKeys}
                   disabled={isGenerating}
-                  className="flex-1 gap-2"
+                  className="flex-1 gap-2 text-xs sm:text-sm h-9 sm:h-10"
                   variant={hasKeys ? "outline" : "default"}
                 >
                   {isGenerating ? (
@@ -255,7 +255,7 @@ export function ProfileCard() {
                   variant="secondary"
                   onClick={handleViewKeys}
                   disabled={!hasKeys}
-                  className="flex-1 gap-2"
+                  className="flex-1 gap-2 text-xs sm:text-sm h-9 sm:h-10"
                 >
                   <Eye className="h-4 w-4" />
                   View Keys

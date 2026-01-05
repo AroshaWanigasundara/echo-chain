@@ -132,13 +132,13 @@ export function ContactList({ onSelectContact, selectedContact }: ContactListPro
       className="h-full flex flex-col"
     >
       <Card className="glass border-border/50 flex-1 flex flex-col overflow-hidden">
-        <CardHeader className="pb-3">
+        <CardHeader className="pb-2 sm:pb-3 p-4 sm:p-6">
           <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-primary" />
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <Users className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               Contacts
               {contacts.length > 0 && (
-                <span className="text-sm font-normal text-muted-foreground">
+                <span className="text-xs sm:text-sm font-normal text-muted-foreground">
                   ({contacts.length})
                 </span>
               )}
@@ -148,25 +148,25 @@ export function ContactList({ onSelectContact, selectedContact }: ContactListPro
               size="icon"
               onClick={handleRefresh}
               disabled={isRefreshing || contactsLoading}
-              className="h-8 w-8"
+              className="h-7 w-7 sm:h-8 sm:w-8"
               title="Sync with blockchain"
             >
-              <RefreshCw className={`h-4 w-4 ${isRefreshing || contactsLoading ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-3 w-3 sm:h-4 sm:w-4 ${isRefreshing || contactsLoading ? "animate-spin" : ""}`} />
             </Button>
           </div>
-          <CardDescription>
+          <CardDescription className="text-xs sm:text-sm">
             Contacts loaded from blockchain
           </CardDescription>
         </CardHeader>
         
-        <CardContent className="flex-1 flex flex-col space-y-4 overflow-hidden">
+        <CardContent className="flex-1 flex flex-col space-y-3 sm:space-y-4 overflow-hidden p-4 sm:p-6 pt-0 sm:pt-0">
           {/* Add Contact */}
           <div className="flex gap-2">
             <Input
               placeholder="Enter address..."
               value={newContactAddress}
               onChange={(e) => setNewContactAddress(e.target.value)}
-              className="font-mono text-sm"
+              className="font-mono text-xs sm:text-sm"
               onKeyDown={(e) => e.key === "Enter" && handleAddContact()}
               disabled={isAdding}
             />
@@ -174,7 +174,7 @@ export function ContactList({ onSelectContact, selectedContact }: ContactListPro
               onClick={handleAddContact}
               disabled={isAdding || !newContactAddress.trim()}
               size="icon"
-              className="shrink-0"
+              className="shrink-0 h-9 w-9 sm:h-10 sm:w-10"
             >
               {isAdding ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

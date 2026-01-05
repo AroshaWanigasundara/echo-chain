@@ -77,13 +77,13 @@ export function KeyManagementModal({
   if (mode === "confirm-replace") {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="glass border-warning/30 max-w-md">
+        <DialogContent className="glass border-warning/30 w-[calc(100%-2rem)] max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-warning">
-              <AlertTriangle className="h-5 w-5" />
+            <DialogTitle className="flex items-center gap-2 text-warning text-base sm:text-lg">
+              <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5" />
               Replace Existing Keys?
             </DialogTitle>
-            <DialogDescription className="text-muted-foreground">
+            <DialogDescription className="text-muted-foreground text-sm">
               This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
@@ -106,11 +106,11 @@ export function KeyManagementModal({
               </div>
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
               <Button
                 variant="outline"
                 onClick={onClose}
-                className="flex-1"
+                className="flex-1 text-sm"
               >
                 Cancel
               </Button>
@@ -119,7 +119,7 @@ export function KeyManagementModal({
                   onConfirmReplace?.();
                   onClose();
                 }}
-                className="flex-1 bg-warning hover:bg-warning/90 text-warning-foreground"
+                className="flex-1 bg-warning hover:bg-warning/90 text-warning-foreground text-sm"
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Replace Keys
@@ -136,13 +136,13 @@ export function KeyManagementModal({
 
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="glass border-border/50 max-w-lg">
+        <DialogContent className="glass border-border/50 w-[calc(100%-2rem)] max-w-lg">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Key className="h-5 w-5 text-primary" />
+            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <Key className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               Your Encryption Keys
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-sm">
               {hasKeys 
                 ? "View and manage your encryption keys securely"
                 : "No keys found in storage"}
