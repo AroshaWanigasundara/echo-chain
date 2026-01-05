@@ -119,10 +119,10 @@ export function VerificationModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md glass border-border/50">
+      <DialogContent className="w-[calc(100%-2rem)] max-w-md glass border-border/50">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5 text-primary" />
+          <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <Shield className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
             Message Verification
           </DialogTitle>
         </DialogHeader>
@@ -236,17 +236,17 @@ export function VerificationModal({
           </div>
 
           {/* Actions */}
-          <div className="flex gap-2 pt-2">
+          <div className="flex flex-col sm:flex-row gap-2 pt-2">
             <Button
               variant="outline"
-              className="flex-1"
+              className="flex-1 text-sm"
               onClick={handleClose}
             >
               <X className="h-4 w-4 mr-2" />
               Close
             </Button>
             <Button
-              className="flex-1"
+              className="flex-1 text-sm"
               onClick={handleVerify}
               disabled={isVerifying}
             >

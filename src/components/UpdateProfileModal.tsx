@@ -70,13 +70,13 @@ export function UpdateProfileModal({ isOpen, onClose }: UpdateProfileModalProps)
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="glass border-border/50 max-w-md">
+      <DialogContent className="glass border-border/50 w-[calc(100%-2rem)] max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <RefreshCw className="h-5 w-5 text-primary" />
+          <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <RefreshCw className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
             Update Profile
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-sm">
             Update your public key on the blockchain
           </DialogDescription>
         </DialogHeader>

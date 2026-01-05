@@ -33,10 +33,11 @@ export function WalletConnect() {
       >
         <Button
           onClick={connectWallet}
-          className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90 glow"
+          className="gap-1 sm:gap-2 bg-primary text-primary-foreground hover:bg-primary/90 glow text-xs sm:text-sm px-2 sm:px-4 h-8 sm:h-10"
         >
           <Wallet className="h-4 w-4" />
-          Connect Wallet
+          <span className="hidden sm:inline">Connect Wallet</span>
+          <span className="sm:hidden">Connect</span>
         </Button>
       </motion.div>
     );
@@ -50,19 +51,19 @@ export function WalletConnect() {
     >
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" className="gap-2 glass border-primary/30 hover:border-primary/60">
-            <div className="flex items-center gap-2">
+          <Button variant="outline" className="gap-1 sm:gap-2 glass border-primary/30 hover:border-primary/60 text-xs sm:text-sm px-2 sm:px-4 h-8 sm:h-10">
+            <div className="flex items-center gap-1 sm:gap-2">
               <div className="h-2 w-2 rounded-full bg-success animate-pulse" />
-              <span className="font-mono text-sm">
+              <span className="font-mono text-xs sm:text-sm">
                 {truncateKey(walletState.address || "")}
               </span>
               {walletState.balance && (
-                <span className="text-muted-foreground text-sm">
+                <span className="text-muted-foreground text-xs sm:text-sm hidden sm:inline">
                   {walletState.balance} UNIT
                 </span>
               )}
             </div>
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64 glass-strong">

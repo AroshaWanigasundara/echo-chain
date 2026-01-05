@@ -305,21 +305,21 @@ export function ChatInterface({ contactAddress, onBack }: ChatInterfaceProps) {
       className="h-full flex flex-col"
     >
       {/* Chat Header */}
-      <div className="flex items-center gap-3 p-4 border-b border-border/50 glass">
+      <div className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4 border-b border-border/50 glass">
         <Button
           variant="ghost"
           size="icon"
-          className="lg:hidden"
+          className="lg:hidden h-8 w-8 sm:h-10 sm:w-10"
           onClick={onBack}
         >
-          <ArrowLeft className="h-5 w-5" />
+          <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
         </Button>
         
         <div className="flex-1 min-w-0">
-          <p className="font-mono text-sm truncate">
+          <p className="font-mono text-xs sm:text-sm truncate">
             {truncateKey(contactAddress)}
           </p>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs text-muted-foreground">
             <Lock className="h-3 w-3" />
             <span>End-to-end encrypted</span>
           </div>
@@ -328,7 +328,7 @@ export function ChatInterface({ contactAddress, onBack }: ChatInterfaceProps) {
         {/* Filter Dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="shrink-0">
+            <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8 sm:h-10 sm:w-10">
               <Filter className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -349,7 +349,7 @@ export function ChatInterface({ contactAddress, onBack }: ChatInterfaceProps) {
         <Button
           variant="ghost"
           size="icon"
-          className="shrink-0"
+          className="shrink-0 h-8 w-8 sm:h-10 sm:w-10"
           onClick={handleVerifyAll}
           disabled={isVerifyingAll}
           title="Verify all messages"
@@ -371,23 +371,23 @@ export function ChatInterface({ contactAddress, onBack }: ChatInterfaceProps) {
       </div>
 
       {/* Messages Area */}
-      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-        <div className="space-y-6">
+      <ScrollArea className="flex-1 p-3 sm:p-4" ref={scrollRef}>
+        <div className="space-y-4 sm:space-y-6">
           <AnimatePresence mode="popLayout">
             {conversationMessages.length === 0 ? (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="text-center py-12 text-muted-foreground"
+                className="text-center py-8 sm:py-12 text-muted-foreground"
               >
-                <Lock className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                <p className="text-sm">
+                <Lock className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-2 sm:mb-3 opacity-30" />
+                <p className="text-xs sm:text-sm">
                   {filter !== "all" 
                     ? `No ${filterLabels[filter].toLowerCase()} messages`
                     : "Start a secure conversation"
                   }
                 </p>
-                <p className="text-xs mt-1">Messages are encrypted end-to-end</p>
+                <p className="text-[10px] sm:text-xs mt-1">Messages are encrypted end-to-end</p>
               </motion.div>
             ) : (
               conversationMessages.map((message) => (
@@ -405,7 +405,7 @@ export function ChatInterface({ contactAddress, onBack }: ChatInterfaceProps) {
       </ScrollArea>
 
       {/* Message Input */}
-      <div className="p-4 border-t border-border/50 glass">
+      <div className="p-3 sm:p-4 border-t border-border/50 glass">
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Input
@@ -415,15 +415,15 @@ export function ChatInterface({ contactAddress, onBack }: ChatInterfaceProps) {
               onChange={(e) => setMessageInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSendMessage()}
               disabled={!recipientPublicKey || isSending}
-              className="pr-10"
+              className="pr-8 sm:pr-10 text-sm"
             />
-            <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Lock className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
           </div>
           <Button
             onClick={handleSendMessage}
             disabled={!messageInput.trim() || !recipientPublicKey || isSending}
             size="icon"
-            className="shrink-0"
+            className="shrink-0 h-9 w-9 sm:h-10 sm:w-10"
           >
             {isSending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -432,7 +432,7 @@ export function ChatInterface({ contactAddress, onBack }: ChatInterfaceProps) {
             )}
           </Button>
         </div>
-        <p className="text-[10px] text-muted-foreground text-center mt-2">
+        <p className="text-[9px] sm:text-[10px] text-muted-foreground text-center mt-2">
           Messages are encrypted and hashes stored on blockchain for verification
         </p>
       </div>

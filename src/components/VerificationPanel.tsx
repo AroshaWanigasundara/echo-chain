@@ -62,47 +62,47 @@ export function VerificationPanel() {
       transition={{ duration: 0.4, delay: 0.2 }}
     >
       <Card className="glass border-border/50">
-        <CardHeader className="pb-3">
+        <CardHeader className="pb-2 sm:pb-3 p-4 sm:p-6">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5 text-primary" />
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                <Shield className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 Verification
               </CardTitle>
-              <CardDescription>Message hash verification status</CardDescription>
+              <CardDescription className="text-xs sm:text-sm">Message hash verification status</CardDescription>
             </div>
             <Button
               variant="outline"
               size="sm"
               onClick={handleVerifyAll}
               disabled={isVerifying}
-              className="gap-2"
+              className="gap-1 sm:gap-2 text-xs sm:text-sm h-8 sm:h-9"
             >
               {isVerifying ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
               ) : (
-                <RefreshCw className="h-4 w-4" />
+                <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4" />
               )}
               Verify
             </Button>
           </div>
         </CardHeader>
         
-        <CardContent>
+        <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0">
           {/* Block Info */}
-          <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/30 mb-4">
-            <span className="text-sm text-muted-foreground">Current Block</span>
-            <span className="font-mono text-primary">
+          <div className="flex items-center justify-between p-2 sm:p-3 rounded-lg bg-secondary/30 mb-3 sm:mb-4">
+            <span className="text-xs sm:text-sm text-muted-foreground">Current Block</span>
+            <span className="font-mono text-primary text-xs sm:text-sm">
               #{blockchainState.blockNumber.toLocaleString()}
             </span>
           </div>
 
           {/* Message Status List */}
-          <ScrollArea className="h-[200px]">
+          <ScrollArea className="h-[150px] sm:h-[200px]">
             {recentMessages.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Shield className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">No messages to verify</p>
+              <div className="text-center py-6 sm:py-8 text-muted-foreground">
+                <Shield className="h-8 w-8 sm:h-10 sm:w-10 mx-auto mb-2 opacity-30" />
+                <p className="text-xs sm:text-sm">No messages to verify</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -111,19 +111,19 @@ export function VerificationPanel() {
                     key={message.id}
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
-                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-secondary/30 transition-colors"
+                    className="flex items-center gap-2 sm:gap-3 p-2 rounded-lg hover:bg-secondary/30 transition-colors"
                   >
                     {getStatusIcon(message.status)}
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-mono truncate">
+                      <p className="text-[10px] sm:text-xs font-mono truncate">
                         {truncateKey(message.hash)}
                       </p>
-                      <p className="text-[10px] text-muted-foreground">
+                      <p className="text-[9px] sm:text-[10px] text-muted-foreground">
                         {getStatusText(message.status)} • {formatDistanceToNow(message.timestamp, { addSuffix: true })}
                       </p>
                     </div>
                     {message.blockNumber && (
-                      <span className="text-[10px] font-mono text-muted-foreground">
+                      <span className="text-[9px] sm:text-[10px] font-mono text-muted-foreground">
                         #{message.blockNumber}
                       </span>
                     )}
@@ -134,17 +134,17 @@ export function VerificationPanel() {
           </ScrollArea>
 
           {/* Legend */}
-          <div className="flex items-center justify-center gap-4 mt-4 pt-4 border-t border-border/50 text-[10px] text-muted-foreground">
+          <div className="flex items-center justify-center gap-3 sm:gap-4 mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-border/50 text-[9px] sm:text-[10px] text-muted-foreground">
             <div className="flex items-center gap-1">
-              <CheckCircle className="h-3 w-3 text-success" />
+              <CheckCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-success" />
               <span>Verified</span>
             </div>
             <div className="flex items-center gap-1">
-              <Clock className="h-3 w-3 text-primary" />
+              <Clock className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-primary" />
               <span>Pending</span>
             </div>
             <div className="flex items-center gap-1">
-              <XCircle className="h-3 w-3 text-destructive" />
+              <XCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-destructive" />
               <span>Failed</span>
             </div>
           </div>
