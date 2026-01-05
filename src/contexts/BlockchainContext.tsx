@@ -133,6 +133,9 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Track if we're in the middle of an account switch to prevent overwriting messages
+  const isAccountSwitchingRef = useRef(false);
+
   // Load messages from user-scoped localStorage
   useEffect(() => {
     if (!walletState.address) {
@@ -140,9 +143,14 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
       return;
     }
     
-    const stored = localStorage.getItem(
-      getUserStorageKey(USER_STORAGE_KEYS.MESSAGES, walletState.address)
-    );
+    // Mark that we're loading (not switching away)
+    isAccountSwitchingRef.current = false;
+    
+    const storageKey = getUserStorageKey(USER_STORAGE_KEYS.MESSAGES, walletState.address);
+    const stored = localStorage.getItem(storageKey);
+    
+    console.log(`Loading messages for ${walletState.address}:`, stored ? JSON.parse(stored).length : 0, 'messages');
+    
     if (stored) {
       try {
         setMessages(JSON.parse(stored));
@@ -155,14 +163,20 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
     }
   }, [walletState.address]);
 
-  // Save messages to user-scoped localStorage
+  // Save messages to user-scoped localStorage - but NEVER overwrite with empty array during account switch
   useEffect(() => {
     if (!walletState.address) return;
     
-    localStorage.setItem(
-      getUserStorageKey(USER_STORAGE_KEYS.MESSAGES, walletState.address),
-      JSON.stringify(messages)
-    );
+    // Don't save empty messages if we're switching accounts (would overwrite existing data)
+    if (messages.length === 0 && isAccountSwitchingRef.current) {
+      console.log('Skipping save: account switching with empty messages');
+      return;
+    }
+    
+    const storageKey = getUserStorageKey(USER_STORAGE_KEYS.MESSAGES, walletState.address);
+    console.log(`Saving ${messages.length} messages for ${walletState.address}`);
+    
+    localStorage.setItem(storageKey, JSON.stringify(messages));
   }, [messages, walletState.address]);
 
   // Update balance when address changes
@@ -205,10 +219,13 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
       // Account switched - clear React state ONLY (not localStorage)
       console.log(`Account switched from ${truncateKey(previousAddress)} to ${truncateKey(currentAddress)}`);
       
+      // Mark that we're switching accounts - this prevents the save effect from overwriting messages
+      isAccountSwitchingRef.current = true;
+      
       // Clear React state ONLY - do NOT clear localStorage
       // Message history for each user is preserved in localStorage with key messageHistory_{address}
       setContacts([]);
-      setMessages([]); // Clear state - will be reloaded from new user's localStorage
+      setMessages([]); // Clear state - will be reloaded from new user's localStorage by the load effect
       setUserProfile(null);
       
       toast({
