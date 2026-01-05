@@ -9,7 +9,7 @@ import { truncateKey } from "@/lib/encryption";
 import { formatDistanceToNow } from "date-fns";
 
 export function VerificationPanel() {
-  const { messages, fetchMessageHashes, blockchainState } = useBlockchain();
+  const { messages, fetchMessageHashes, blockchainState, walletState, contacts } = useBlockchain();
   const [isVerifying, setIsVerifying] = useState(false);
 
   const handleVerifyAll = async () => {
@@ -21,7 +21,27 @@ export function VerificationPanel() {
     }
   };
 
-  const recentMessages = messages
+  // Filter messages to show only those relevant to the current user
+  const relevantMessages = messages.filter((message) => {
+    // Include messages where the current user is sender or recipient
+    const isUserInvolved = 
+      message.sender === walletState.address || 
+      message.recipient === walletState.address;
+    
+    if (!isUserInvolved) return false;
+    
+    // Also check if the other party is in the user's approved contacts
+    const otherAddress = message.sender === walletState.address 
+      ? message.recipient 
+      : message.sender;
+    
+    const isApprovedContact = contacts.some((contact) => contact.address === otherAddress);
+    
+    // Show message if user is involved AND other party is an approved contact
+    return isApprovedContact;
+  });
+
+  const recentMessages = relevantMessages
     .slice(-20)
     .reverse();
 
