@@ -343,10 +343,41 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
       const profile = await api.query.messaging?.userProfiles?.(address);
       
       if (profile && !profile.isEmpty) {
-        const publicKeyData = profile.toHuman();
+        // Get raw bytes from blockchain
+        const rawData = profile.toU8a ? profile.toU8a() : null;
+        const humanData = profile.toHuman();
+        
+        let publicKeyHex: string;
+        
+        // Handle different possible formats from blockchain
+        if (rawData && rawData.length >= 32) {
+          // Convert raw bytes to hex string (skip any length prefix)
+          // NaCl public keys are 32 bytes
+          const keyBytes = rawData.slice(-32); // Take last 32 bytes
+          publicKeyHex = Array.from(keyBytes)
+            .map((b) => b.toString(16).padStart(2, "0"))
+            .join("");
+        } else if (Array.isArray(humanData)) {
+          // Array of numbers - convert to hex
+          publicKeyHex = humanData
+            .map((b: number | string) => {
+              const num = typeof b === "string" ? parseInt(b, 10) : b;
+              return num.toString(16).padStart(2, "0");
+            })
+            .join("");
+        } else if (typeof humanData === "string") {
+          // Already hex string - remove 0x prefix if present
+          publicKeyHex = humanData.startsWith("0x") ? humanData.slice(2) : humanData;
+        } else {
+          console.error("Unknown public key format from blockchain:", humanData);
+          return null;
+        }
+        
+        console.log(`Fetched public key for ${address}:`, publicKeyHex.slice(0, 16) + "...");
+        
         return {
           address,
-          publicKey: typeof publicKeyData === "string" ? publicKeyData : JSON.stringify(publicKeyData),
+          publicKey: publicKeyHex,
           bondPaid: true,
         };
       }
