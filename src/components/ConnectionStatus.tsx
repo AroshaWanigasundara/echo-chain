@@ -1,10 +1,12 @@
 import { motion } from "framer-motion";
-import { Activity, Wifi, WifiOff, Database, Clock } from "lucide-react";
+import { Activity, Wifi, WifiOff, Database, Radio } from "lucide-react";
 import { useBlockchain } from "@/contexts/BlockchainContext";
+import { usePubnub } from "@/contexts/PubnubContext";
 import { RPC_ENDPOINT } from "@/lib/constants";
 
 export function ConnectionStatus() {
   const { blockchainState } = useBlockchain();
+  const { isConnected: isPubNubConnected } = usePubnub();
 
   return (
     <motion.div
@@ -12,7 +14,7 @@ export function ConnectionStatus() {
       animate={{ opacity: 1, y: 0 }}
       className="flex items-center gap-4 text-xs text-muted-foreground"
     >
-      {/* Connection Status */}
+      {/* Blockchain Connection Status */}
       <div className="flex items-center gap-1.5">
         {blockchainState.connecting ? (
           <>
@@ -22,7 +24,7 @@ export function ConnectionStatus() {
         ) : blockchainState.connected ? (
           <>
             <Wifi className="h-3 w-3 text-success" />
-            <span className="text-success">Connected</span>
+            <span className="text-success">Chain</span>
           </>
         ) : (
           <>
@@ -32,16 +34,24 @@ export function ConnectionStatus() {
         )}
       </div>
 
+      {/* P2P Status */}
+      <div className="flex items-center gap-1.5">
+        <Radio className={`h-3 w-3 ${isPubNubConnected ? 'text-success' : 'text-muted-foreground'}`} />
+        <span className={isPubNubConnected ? 'text-success' : ''}>
+          {isPubNubConnected ? 'P2P' : 'Offline'}
+        </span>
+      </div>
+
       {/* Block Number */}
       {blockchainState.connected && (
-        <div className="flex items-center gap-1.5">
+        <div className="hidden sm:flex items-center gap-1.5">
           <Database className="h-3 w-3" />
-          <span>Block #{blockchainState.blockNumber.toLocaleString()}</span>
+          <span>#{blockchainState.blockNumber.toLocaleString()}</span>
         </div>
       )}
 
       {/* RPC Endpoint */}
-      <div className="hidden md:flex items-center gap-1.5">
+      <div className="hidden lg:flex items-center gap-1.5">
         <Activity className="h-3 w-3" />
         <span className="font-mono truncate max-w-[200px]">{RPC_ENDPOINT}</span>
       </div>

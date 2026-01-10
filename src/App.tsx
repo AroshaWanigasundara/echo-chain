@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { BlockchainProvider } from "@/contexts/BlockchainContext";
 import { EncryptionProvider } from "@/contexts/EncryptionContext";
+import { PubnubProvider } from "@/contexts/PubnubContext";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 
@@ -15,15 +16,17 @@ const App = () => (
     <TooltipProvider>
       <BlockchainProvider>
         <EncryptionProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
+          <PubnubProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <Routes>
+                <Route path="/" element={<Index />} />
+                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </PubnubProvider>
         </EncryptionProvider>
       </BlockchainProvider>
     </TooltipProvider>
