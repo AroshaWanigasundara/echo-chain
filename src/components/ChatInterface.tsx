@@ -1,11 +1,12 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Lock, ArrowLeft, RefreshCw, Loader2, Filter, ShieldCheck } from "lucide-react";
+import { Send, Lock, ArrowLeft, RefreshCw, Loader2, Filter, ShieldCheck, Radio } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useBlockchain } from "@/contexts/BlockchainContext";
 import { useEncryption } from "@/contexts/EncryptionContext";
+import { usePubnub } from "@/contexts/PubnubContext";
 import { MessageBubble } from "@/components/MessageBubble";
 import { VerificationModal } from "@/components/VerificationModal";
 import { truncateKey } from "@/lib/encryption";
@@ -43,6 +44,7 @@ export function ChatInterface({ contactAddress, onBack }: ChatInterfaceProps) {
     verifyMessageOnChain
   } = useBlockchain();
   const { encrypt, hash, publicKey } = useEncryption();
+  const { isConnected: isPubNubConnected, sendP2PMessage } = usePubnub();
   
   const [messageInput, setMessageInput] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -188,9 +190,31 @@ export function ChatInterface({ contactAddress, onBack }: ChatInterfaceProps) {
       // Update message with blockchain ID and status
       updateMessageStatus(tempId, "sent", blockNumber, messageId);
       
+      // Publish via PubNub for real-time delivery
+      try {
+        const encryptedBytes = new TextEncoder().encode(encryptedData.ciphertext);
+        const nonceBytes = new TextEncoder().encode(encryptedData.nonce);
+        
+        await sendP2PMessage({
+          messageId,
+          conversationId: convId,
+          sender: walletState.address,
+          recipient: contactAddress,
+          encryptedData: Array.from(encryptedBytes),
+          nonce: Array.from(nonceBytes),
+          messageHash,
+          blockNumber,
+          timestamp: Date.now()
+        });
+        console.log('✓ Message delivered via PubNub');
+      } catch (pubNubError) {
+        console.error('PubNub delivery failed:', pubNubError);
+        // Don't fail the send - blockchain is primary
+      }
+      
       toast({
         title: "Message sent",
-        description: "Hash stored on blockchain",
+        description: isPubNubConnected ? "Delivered via P2P" : "Hash stored on blockchain",
       });
       
     } catch (error) {
@@ -360,6 +384,11 @@ export function ChatInterface({ contactAddress, onBack }: ChatInterfaceProps) {
             <ShieldCheck className="h-4 w-4" />
           )}
         </Button>
+        
+        {/* P2P Status Indicator */}
+        <div className="flex items-center gap-1" title={isPubNubConnected ? "P2P Connected" : "P2P Offline"}>
+          <Radio className={`h-3 w-3 ${isPubNubConnected ? 'text-success' : 'text-muted-foreground'}`} />
+        </div>
         
         {isLoadingRecipient ? (
           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
