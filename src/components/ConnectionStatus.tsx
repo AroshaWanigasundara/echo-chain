@@ -1,12 +1,10 @@
 import { motion } from "framer-motion";
-import { Activity, Wifi, WifiOff, Database, Radio, Users } from "lucide-react";
+import { Activity, Wifi, WifiOff, Database, Clock } from "lucide-react";
 import { useBlockchain } from "@/contexts/BlockchainContext";
-import { useLibp2p } from "@/contexts/Libp2pContext";
 import { RPC_ENDPOINT } from "@/lib/constants";
 
 export function ConnectionStatus() {
   const { blockchainState } = useBlockchain();
-  const { isP2PConnected, isP2PConnecting, peerCount } = useLibp2p();
 
   return (
     <motion.div
@@ -14,7 +12,7 @@ export function ConnectionStatus() {
       animate={{ opacity: 1, y: 0 }}
       className="flex items-center gap-4 text-xs text-muted-foreground"
     >
-      {/* Blockchain Connection Status */}
+      {/* Connection Status */}
       <div className="flex items-center gap-1.5">
         {blockchainState.connecting ? (
           <>
@@ -24,7 +22,7 @@ export function ConnectionStatus() {
         ) : blockchainState.connected ? (
           <>
             <Wifi className="h-3 w-3 text-success" />
-            <span className="text-success">Chain</span>
+            <span className="text-success">Connected</span>
           </>
         ) : (
           <>
@@ -33,34 +31,6 @@ export function ConnectionStatus() {
           </>
         )}
       </div>
-
-      {/* P2P Connection Status */}
-      <div className="flex items-center gap-1.5">
-        {isP2PConnecting ? (
-          <>
-            <div className="h-2 w-2 rounded-full bg-warning animate-pulse" />
-            <span>P2P...</span>
-          </>
-        ) : isP2PConnected ? (
-          <>
-            <Radio className="h-3 w-3 text-success" />
-            <span className="text-success">P2P</span>
-          </>
-        ) : (
-          <>
-            <Radio className="h-3 w-3 text-muted-foreground" />
-            <span>P2P Off</span>
-          </>
-        )}
-      </div>
-
-      {/* Peer Count */}
-      {isP2PConnected && peerCount > 0 && (
-        <div className="flex items-center gap-1.5">
-          <Users className="h-3 w-3" />
-          <span>{peerCount} peers</span>
-        </div>
-      )}
 
       {/* Block Number */}
       {blockchainState.connected && (

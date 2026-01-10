@@ -11,14 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@chainsafe/libp2p-gossipsub": "^14.1.2",
-    "@chainsafe/libp2p-noise": "^16.1.5",
-    "@chainsafe/libp2p-yamux": "^7.0.4",
     "@hookform/resolvers": "^3.10.0",
-    "@libp2p/bootstrap": "^10.1.5",
-    "@libp2p/identify": "^3.0.39",
-    "@libp2p/webrtc": "^4.1.10",
-    "@libp2p/websockets": "^8.2.0",
     "@polkadot/api": "^16.5.4",
     "@polkadot/extension-dapp": "^0.62.6",
     "@radix-ui/react-accordion": "^1.2.11",
@@ -57,7 +50,6 @@
     "framer-motion": "^12.23.26",
     "input-otp": "^1.4.2",
     "js-sha256": "^0.11.1",
-    "libp2p": "^1.9.4",
     "lucide-react": "^0.462.0",
     "next-themes": "^0.3.0",
     "react": "^18.3.1",

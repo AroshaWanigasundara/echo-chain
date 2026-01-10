@@ -1,12 +1,11 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Lock, ArrowLeft, RefreshCw, Loader2, Filter, ShieldCheck, Radio } from "lucide-react";
+import { Send, Lock, ArrowLeft, RefreshCw, Loader2, Filter, ShieldCheck } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useBlockchain } from "@/contexts/BlockchainContext";
 import { useEncryption } from "@/contexts/EncryptionContext";
-import { useLibp2p } from "@/contexts/Libp2pContext";
 import { MessageBubble } from "@/components/MessageBubble";
 import { VerificationModal } from "@/components/VerificationModal";
 import { truncateKey } from "@/lib/encryption";
@@ -44,7 +43,6 @@ export function ChatInterface({ contactAddress, onBack }: ChatInterfaceProps) {
     verifyMessageOnChain
   } = useBlockchain();
   const { encrypt, hash, publicKey } = useEncryption();
-  const { sendP2PMessage, isP2PConnected } = useLibp2p();
   
   const [messageInput, setMessageInput] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -190,38 +188,9 @@ export function ChatInterface({ contactAddress, onBack }: ChatInterfaceProps) {
       // Update message with blockchain ID and status
       updateMessageStatus(tempId, "sent", blockNumber, messageId);
       
-      // NEW: Publish to recipient's inbox via libp2p
-      try {
-        if (isP2PConnected) {
-          const p2pMessage = {
-            messageId,
-            conversationId: convId,
-            sender: walletState.address,
-            recipient: contactAddress,
-            encryptedData,
-            messageHash,
-            blockNumber,
-            timestamp: storedMessage.timestamp,
-          };
-          
-          const p2pDelivered = await sendP2PMessage(p2pMessage);
-          
-          if (p2pDelivered) {
-            console.log('✓ Message delivered via P2P');
-          } else {
-            console.log('P2P delivery failed, recipient will receive on next login');
-          }
-        } else {
-          console.log('P2P not available, recipient will receive on next login');
-        }
-      } catch (p2pError) {
-        console.error('P2P delivery error:', p2pError);
-        // Don't fail the whole send operation
-      }
-      
       toast({
         title: "Message sent",
-        description: isP2PConnected ? "Hash stored on blockchain, delivered via P2P" : "Hash stored on blockchain",
+        description: "Hash stored on blockchain",
       });
       
     } catch (error) {
@@ -235,7 +204,7 @@ export function ChatInterface({ contactAddress, onBack }: ChatInterfaceProps) {
     } finally {
       setIsSending(false);
     }
-  }, [messageInput, contactAddress, walletState.address, recipientPublicKey, encrypt, hash, addStoredMessage, sendMessageHash, updateMessageStatus, isP2PConnected, sendP2PMessage]);
+  }, [messageInput, contactAddress, walletState.address, recipientPublicKey, encrypt, hash, addStoredMessage, sendMessageHash, updateMessageStatus]);
 
   const handleVerifyMessage = async (message: ChatMessage): Promise<MessageVerificationResult> => {
     if (!verifyMessageOnChain) {
@@ -353,13 +322,6 @@ export function ChatInterface({ contactAddress, onBack }: ChatInterfaceProps) {
           <div className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs text-muted-foreground">
             <Lock className="h-3 w-3" />
             <span>End-to-end encrypted</span>
-            {isP2PConnected && (
-              <>
-                <span className="text-muted-foreground/50">•</span>
-                <Radio className="h-3 w-3 text-success" />
-                <span className="text-success">P2P</span>
-              </>
-            )}
           </div>
         </div>
         
