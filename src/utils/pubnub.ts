@@ -4,6 +4,7 @@ let pubnubInstance: PubNub | null = null;
 let messageListeners: ((message: PubNubMessage) => void)[] = [];
 let statusListeners: ((connected: boolean) => void)[] = [];
 let isConnected = false;
+let currentListener: any = null;
 
 export interface PubNubMessage {
   messageId: string;
@@ -24,8 +25,8 @@ export function initializePubNub(userAddress: string): PubNub {
   }
 
   pubnubInstance = new PubNub({
-    publishKey: 'YOUR_PUBLISH_KEY_HERE',
-    subscribeKey: 'YOUR_SUBSCRIBE_KEY_HERE',
+    publishKey: 'pub-c-4d5827a5-129f-46a7-afb3-ae1060cc7277',
+    subscribeKey: 'sub-c-7781c1a9-a4ba-4f26-8516-c5aca921beb8',
     userId: userAddress,
     restore: true,
     heartbeatInterval: 30
@@ -51,6 +52,7 @@ export function cleanupPubNub(): void {
     isConnected = false;
     messageListeners = [];
     statusListeners = [];
+    currentListener = null;
     console.log('✓ PubNub cleaned up');
   }
 }
@@ -63,11 +65,20 @@ export function subscribeToInbox(userAddress: string, messageHandler: (message: 
 
   const inboxChannel = `inbox-${userAddress}`;
   
+  // Remove old listener if it exists
+  if (currentListener) {
+    pubnubInstance.removeListener(currentListener);
+  }
+  
+  // Clear old handlers
+  messageListeners = [];
+  statusListeners = [];
+  
   // Store the handler
   messageListeners.push(messageHandler);
 
-  pubnubInstance.addListener({
-    message: (event) => {
+  currentListener = {
+    message: (event: any) => {
       if (event.channel === inboxChannel) {
         console.log('📨 PubNub message received:', event.message);
         // Cast the message to our type
@@ -75,7 +86,7 @@ export function subscribeToInbox(userAddress: string, messageHandler: (message: 
         messageListeners.forEach(handler => handler(msg));
       }
     },
-    status: (statusEvent) => {
+    status: (statusEvent: any) => {
       if (statusEvent.category === 'PNConnectedCategory') {
         console.log('✓ PubNub connected to channel:', inboxChannel);
         isConnected = true;
@@ -91,8 +102,9 @@ export function subscribeToInbox(userAddress: string, messageHandler: (message: 
         statusListeners.forEach(handler => handler(true));
       }
     }
-  });
+  };
 
+  pubnubInstance.addListener(currentListener);
   pubnubInstance.subscribe({ channels: [inboxChannel] });
   console.log('✓ Subscribed to:', inboxChannel);
 }
