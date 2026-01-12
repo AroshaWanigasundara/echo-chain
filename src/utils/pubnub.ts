@@ -60,10 +60,18 @@ export function cleanupPubNub(): void {
     isConnected = false;
     messageListeners = [];
     statusListeners = [];
+    confirmationHandlers = [];
+    inboxHandlers = [];
+    subscribedChannels = [];
     currentListener = null;
     console.log('✓ PubNub cleaned up');
   }
 }
+
+// Store all channel subscriptions and their handlers
+let subscribedChannels: string[] = [];
+let inboxHandlers: ((message: PubNubMessage) => void)[] = [];
+let confirmationHandlers: ((confirmation: DeliveryConfirmation) => void)[] = [];
 
 export function subscribeToInbox(userAddress: string, messageHandler: (message: PubNubMessage) => void): void {
   if (!pubnubInstance) {
@@ -73,30 +81,45 @@ export function subscribeToInbox(userAddress: string, messageHandler: (message: 
 
   const inboxChannel = `inbox-${userAddress}`;
   
-  // Remove old listener if it exists
-  if (currentListener) {
-    pubnubInstance.removeListener(currentListener);
+  // Add handler
+  inboxHandlers.push(messageHandler);
+  
+  // Subscribe to inbox if not already subscribed
+  if (!subscribedChannels.includes(inboxChannel)) {
+    subscribedChannels.push(inboxChannel);
+    setupUnifiedListener();
+    pubnubInstance.subscribe({ channels: [inboxChannel] });
+    console.log('✓ Subscribed to:', inboxChannel);
   }
-  
-  // Clear old handlers
-  messageListeners = [];
-  statusListeners = [];
-  
-  // Store the handler
-  messageListeners.push(messageHandler);
+}
+
+function setupUnifiedListener(): void {
+  if (!pubnubInstance || currentListener) {
+    return;
+  }
 
   currentListener = {
     message: (event: any) => {
-      if (event.channel === inboxChannel) {
+      const inboxChannel = event.channel;
+      const confirmationChannel = event.channel;
+      
+      // Handle inbox messages
+      if (inboxChannel.startsWith('inbox-')) {
         console.log('📨 PubNub message received:', event.message);
-        // Cast the message to our type
         const msg = event.message as unknown as PubNubMessage;
-        messageListeners.forEach(handler => handler(msg));
+        inboxHandlers.forEach(handler => handler(msg));
+      }
+      
+      // Handle delivery confirmations
+      if (confirmationChannel.startsWith('confirmations-')) {
+        console.log('📦 Delivery confirmation received:', event.message);
+        const confirmation = event.message as unknown as DeliveryConfirmation;
+        confirmationHandlers.forEach(handler => handler(confirmation));
       }
     },
     status: (statusEvent: any) => {
       if (statusEvent.category === 'PNConnectedCategory') {
-        console.log('✓ PubNub connected to channel:', inboxChannel);
+        console.log('✓ PubNub connected');
         isConnected = true;
         statusListeners.forEach(handler => handler(true));
       } else if (statusEvent.category === 'PNNetworkDownCategory' || 
@@ -113,8 +136,6 @@ export function subscribeToInbox(userAddress: string, messageHandler: (message: 
   };
 
   pubnubInstance.addListener(currentListener);
-  pubnubInstance.subscribe({ channels: [inboxChannel] });
-  console.log('✓ Subscribed to:', inboxChannel);
 }
 
 export async function publishMessage(recipientAddress: string, messageData: PubNubMessage): Promise<void> {
@@ -217,7 +238,6 @@ export async function sendDeliveryConfirmation(
 
 // Store confirmation listeners
 let confirmationListeners: ((confirmation: DeliveryConfirmation) => void)[] = [];
-let confirmationListener: any = null;
 
 export function subscribeToConfirmations(
   userAddress: string,
@@ -230,46 +250,30 @@ export function subscribeToConfirmations(
 
   const confirmationChannel = `confirmations-${userAddress}`;
   
-  // Remove old listener if it exists
-  if (confirmationListener) {
-    pubnubInstance.removeListener(confirmationListener);
+  // Add handler
+  confirmationHandlers.push(confirmationHandler);
+  
+  // Subscribe to confirmations if not already subscribed
+  if (!subscribedChannels.includes(confirmationChannel)) {
+    subscribedChannels.push(confirmationChannel);
+    setupUnifiedListener();
+    pubnubInstance.subscribe({ channels: [confirmationChannel] });
+    console.log('✓ Subscribed to confirmations:', confirmationChannel);
   }
-  
-  // Clear old handlers
-  confirmationListeners = [];
-  
-  // Store the handler
-  confirmationListeners.push(confirmationHandler);
-
-  confirmationListener = {
-    message: (event: any) => {
-      if (event.channel === confirmationChannel) {
-        console.log('📦 Delivery confirmation received:', event.message);
-        const confirmation = event.message as unknown as DeliveryConfirmation;
-        confirmationListeners.forEach(handler => handler(confirmation));
-      }
-    },
-    status: (statusEvent: any) => {
-      if (statusEvent.category === 'PNConnectedCategory') {
-        console.log('✓ PubNub connected to confirmation channel:', confirmationChannel);
-      }
-    }
-  };
-
-  pubnubInstance.addListener(confirmationListener);
-  pubnubInstance.subscribe({ channels: [confirmationChannel] });
-  console.log('✓ Subscribed to confirmations:', confirmationChannel);
 }
 
 export function unsubscribeFromConfirmations(userAddress: string): void {
-  if (!pubnubInstance || !confirmationListener) {
+  if (!pubnubInstance) {
     return;
   }
 
   const confirmationChannel = `confirmations-${userAddress}`;
+  const index = subscribedChannels.indexOf(confirmationChannel);
+  if (index > -1) {
+    subscribedChannels.splice(index, 1);
+  }
+  
   pubnubInstance.unsubscribe({ channels: [confirmationChannel] });
-  pubnubInstance.removeListener(confirmationListener);
-  confirmationListener = null;
-  confirmationListeners = [];
+  confirmationHandlers = [];
   console.log('✓ Unsubscribed from confirmations:', confirmationChannel);
 }
