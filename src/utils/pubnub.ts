@@ -18,6 +18,14 @@ export interface PubNubMessage {
   timestamp: number;
 }
 
+export interface DeliveryConfirmation {
+  type: "delivery_confirmation";
+  messageId: string;
+  deliveredTo: string;
+  deliveredAt: number;
+  originalSender: string;
+}
+
 export function initializePubNub(userAddress: string): PubNub {
   if (pubnubInstance) {
     console.log('PubNub already initialized');
@@ -174,4 +182,94 @@ export async function fetchMessageHistory(userAddress: string): Promise<PubNubMe
     console.error('Failed to fetch message history:', error);
     return [];
   }
+}
+
+export async function sendDeliveryConfirmation(
+  senderAddress: string,
+  messageId: string,
+  receiverAddress: string
+): Promise<void> {
+  if (!pubnubInstance) {
+    throw new Error('PubNub not initialized');
+  }
+
+  const confirmationChannel = `confirmations-${senderAddress}`;
+  const confirmation: DeliveryConfirmation = {
+    type: "delivery_confirmation",
+    messageId,
+    deliveredTo: receiverAddress,
+    deliveredAt: Date.now(),
+    originalSender: senderAddress
+  };
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await pubnubInstance.publish({
+      channel: confirmationChannel,
+      message: confirmation as any
+    });
+    console.log('✓ Sent delivery confirmation:', messageId);
+  } catch (error) {
+    console.error('Failed to send delivery confirmation:', error);
+    throw error;
+  }
+}
+
+// Store confirmation listeners
+let confirmationListeners: ((confirmation: DeliveryConfirmation) => void)[] = [];
+let confirmationListener: any = null;
+
+export function subscribeToConfirmations(
+  userAddress: string,
+  confirmationHandler: (confirmation: DeliveryConfirmation) => void
+): void {
+  if (!pubnubInstance) {
+    console.error('PubNub not initialized');
+    return;
+  }
+
+  const confirmationChannel = `confirmations-${userAddress}`;
+  
+  // Remove old listener if it exists
+  if (confirmationListener) {
+    pubnubInstance.removeListener(confirmationListener);
+  }
+  
+  // Clear old handlers
+  confirmationListeners = [];
+  
+  // Store the handler
+  confirmationListeners.push(confirmationHandler);
+
+  confirmationListener = {
+    message: (event: any) => {
+      if (event.channel === confirmationChannel) {
+        console.log('📦 Delivery confirmation received:', event.message);
+        const confirmation = event.message as unknown as DeliveryConfirmation;
+        confirmationListeners.forEach(handler => handler(confirmation));
+      }
+    },
+    status: (statusEvent: any) => {
+      if (statusEvent.category === 'PNConnectedCategory') {
+        console.log('✓ PubNub connected to confirmation channel:', confirmationChannel);
+      }
+    }
+  };
+
+  pubnubInstance.addListener(confirmationListener);
+  pubnubInstance.subscribe({ channels: [confirmationChannel] });
+  console.log('✓ Subscribed to confirmations:', confirmationChannel);
+}
+
+export function unsubscribeFromConfirmations(userAddress: string): void {
+  if (!pubnubInstance || !confirmationListener) {
+    return;
+  }
+
+  const confirmationChannel = `confirmations-${userAddress}`;
+  pubnubInstance.unsubscribe({ channels: [confirmationChannel] });
+  pubnubInstance.removeListener(confirmationListener);
+  confirmationListener = null;
+  confirmationListeners = [];
+  console.log('✓ Unsubscribed from confirmations:', confirmationChannel);
 }
