@@ -35,6 +35,8 @@ export function MessageBubble({
         return <Loader2 className="h-3 w-3 animate-spin" />;
       case "sent":
         return <Check className="h-3 w-3" />;
+      case "delivered":
+        return <CheckCheck className="h-3 w-3 text-blue-500" />;
       case "verified":
         return <CheckCheck className="h-3 w-3 text-primary" />;
       case "failed":
