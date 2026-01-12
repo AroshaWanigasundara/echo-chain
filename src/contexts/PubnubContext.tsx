@@ -28,7 +28,7 @@ interface PubnubContextType {
 const PubnubContext = createContext<PubnubContextType | null>(null);
 
 export function PubnubProvider({ children }: { children: ReactNode }) {
-  const { walletState, addStoredMessage, fetchUserProfile, messages } = useBlockchain();
+  const { walletState, addStoredMessage, fetchUserProfile, messages, updateMessageStatus } = useBlockchain();
   const { decrypt } = useEncryption();
   const [isConnected, setIsConnected] = useState(false);
 
@@ -122,7 +122,10 @@ export function PubnubProvider({ children }: { children: ReactNode }) {
     try {
       console.log('📦 Processing delivery confirmation for message:', confirmation.messageId);
       
-      // Find the message in storage and update its status
+      // Update message status in the in-memory messages state
+      updateMessageStatus(confirmation.messageId, "delivered");
+      
+      // Also update in localStorage for persistence
       const storageKey = `messaging_messages_${walletState.address}`;
       const storedMessagesStr = localStorage.getItem(storageKey);
       
@@ -139,7 +142,7 @@ export function PubnubProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Failed to handle delivery confirmation:', error);
     }
-  }, [walletState.address]);
+  }, [walletState.address, updateMessageStatus]);
 
   // Initialize PubNub when wallet connects
   useEffect(() => {
