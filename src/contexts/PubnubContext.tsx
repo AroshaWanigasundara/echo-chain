@@ -9,6 +9,7 @@ import {
   isPubNubConnected,
   addStatusListener,
   removeStatusListener,
+  fetchMessageHistory,
   PubNubMessage
 } from "@/utils/pubnub";
 import { StoredMessage } from "@/lib/types";
@@ -131,6 +132,79 @@ export function PubnubProvider({ children }: { children: ReactNode }) {
       });
     }
   }, [walletState.address, handleIncomingMessage]);
+
+  // Fetch message history when user connects (for offline message delivery)
+  useEffect(() => {
+    if (!walletState.address || !walletState.connected) return;
+
+    const fetchHistory = async () => {
+      try {
+        const historicalMessages = await fetchMessageHistory(walletState.address);
+        
+        // Process each historical message
+        for (const messageData of historicalMessages) {
+          // Check if message already exists
+          const exists = messages.some(m => m.id === messageData.messageId);
+          if (exists) {
+            console.log('Historical message already exists, skipping');
+            continue;
+          }
+
+          // Create the stored message
+          const receivedMessage: StoredMessage = {
+            id: messageData.messageId,
+            conversationId: messageData.conversationId,
+            sender: messageData.sender,
+            recipient: messageData.recipient,
+            encryptedData: {
+              ciphertext: '',
+              nonce: ''
+            },
+            hash: messageData.messageHash,
+            timestamp: messageData.timestamp,
+            status: "sent",
+            blockNumber: messageData.blockNumber,
+            decryptedContent: undefined,
+            direction: "received",
+            verified: false,
+            expired: false,
+            canVerify: true
+          };
+
+          // Try to decrypt
+          try {
+            const senderProfile = await fetchUserProfile(messageData.sender);
+            
+            if (senderProfile?.publicKey) {
+              const decrypted = decrypt(
+                {
+                  ciphertext: String.fromCharCode(...messageData.encryptedData),
+                  nonce: String.fromCharCode(...messageData.nonce)
+                },
+                senderProfile.publicKey
+              );
+              
+              receivedMessage.decryptedContent = decrypted;
+            } else {
+              receivedMessage.decryptedContent = '[Sender public key not found]';
+            }
+          } catch (decryptError) {
+            console.error('Decryption failed:', decryptError);
+            receivedMessage.decryptedContent = '[Decryption failed]';
+          }
+
+          // Store the message
+          addStoredMessage(receivedMessage);
+        }
+      } catch (error) {
+        console.error('Failed to fetch message history:', error);
+      }
+    };
+
+    // Fetch history after a short delay to ensure connection is ready
+    const timer = setTimeout(fetchHistory, 500);
+    return () => clearTimeout(timer);
+  }, [walletState.address, walletState.connected, messages, addStoredMessage, fetchUserProfile, decrypt]);
 
   // Cleanup on window close
   useEffect(() => {
