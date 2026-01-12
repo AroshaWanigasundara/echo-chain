@@ -26,7 +26,7 @@ export interface StoredMessage {
   };
   hash: string;
   timestamp: number;
-  status: "sending" | "sent" | "verified" | "failed";
+  status: "sending" | "sent" | "delivered" | "verified" | "failed";
   blockNumber?: number;
   decryptedContent?: string;
   direction: "sent" | "received";
@@ -43,7 +43,7 @@ export interface ChatMessage {
   recipient: string;
   timestamp: number;
   isMine: boolean;
-  status: "sending" | "sent" | "verified" | "failed";
+  status: "sending" | "sent" | "delivered" | "verified" | "failed";
   encrypted: boolean;
   hash?: string;
   blockNumber?: number;
