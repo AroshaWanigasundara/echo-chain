@@ -247,15 +247,26 @@ export function BlockchainProvider({ children }: { children: ReactNode }) {
         if (currentAccounts.length > 0) {
           const newAddress = currentAccounts[0].address;
           if (newAddress && newAddress !== walletState.address) {
-            setWalletState((prev) => ({
-              ...prev,
-              address: newAddress,
+            // Account changed - disconnect and reload page to home
+            console.log(`Account changed detected. Disconnecting and reloading...`);
+            toast({
+              title: "Wallet changed",
+              description: "Please connect your wallet again",
+            });
+            // Disconnect wallet
+            setWalletState({
+              connected: false,
+              address: null,
               balance: null,
-              accounts: currentAccounts.map((a) => ({
-                address: a.address,
-                meta: { name: a.meta.name },
-              })),
-            }));
+              accounts: [],
+            });
+            setUserProfile(null);
+            setContacts([]);
+            setMessages([]);
+            // Redirect to home page
+            setTimeout(() => {
+              window.location.href = "/";
+            }, 500);
           }
         }
       } catch (error) {
