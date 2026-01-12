@@ -136,3 +136,42 @@ export function addStatusListener(handler: (connected: boolean) => void): void {
 export function removeStatusListener(handler: (connected: boolean) => void): void {
   statusListeners = statusListeners.filter(h => h !== handler);
 }
+
+export async function fetchMessageHistory(userAddress: string): Promise<PubNubMessage[]> {
+  if (!pubnubInstance) {
+    console.error('PubNub not initialized');
+    return [];
+  }
+
+  const inboxChannel = `inbox-${userAddress}`;
+  
+  try {
+    console.log('📥 Fetching message history from:', inboxChannel);
+    
+    const result = await pubnubInstance.fetchMessages({ 
+      channels: [inboxChannel],
+      count: 100  // Fetch last 100 messages
+    });
+
+    const messages: PubNubMessage[] = [];
+    
+    if (result.channels && result.channels[inboxChannel]) {
+      result.channels[inboxChannel].forEach((msg: any) => {
+        try {
+          const message = msg.message as PubNubMessage;
+          if (message && message.messageId) {
+            messages.push(message);
+          }
+        } catch (e) {
+          console.warn('Failed to parse message from history:', e);
+        }
+      });
+    }
+
+    console.log(`✓ Fetched ${messages.length} messages from history`);
+    return messages;
+  } catch (error) {
+    console.error('Failed to fetch message history:', error);
+    return [];
+  }
+}
