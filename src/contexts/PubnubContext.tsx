@@ -10,7 +10,11 @@ import {
   addStatusListener,
   removeStatusListener,
   fetchMessageHistory,
-  PubNubMessage
+  sendDeliveryConfirmation,
+  subscribeToConfirmations,
+  unsubscribeFromConfirmations,
+  PubNubMessage,
+  DeliveryConfirmation
 } from "@/utils/pubnub";
 import { StoredMessage } from "@/lib/types";
 import { toast } from "@/hooks/use-toast";
@@ -87,6 +91,21 @@ export function PubnubProvider({ children }: { children: ReactNode }) {
       // Store the message
       addStoredMessage(receivedMessage);
 
+      // Send delivery confirmation back to sender
+      if (walletState.address) {
+        try {
+          await sendDeliveryConfirmation(
+            messageData.sender,
+            messageData.messageId,
+            walletState.address
+          );
+          console.log('✓ Delivery confirmation sent for message:', messageData.messageId);
+        } catch (confirmError) {
+          console.error('Failed to send delivery confirmation:', confirmError);
+          // Don't fail the whole process if confirmation fails
+        }
+      }
+
       // Show notification
       toast({
         title: "New message",
@@ -96,19 +115,46 @@ export function PubnubProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Failed to handle incoming PubNub message:', error);
     }
-  }, [messages, addStoredMessage, fetchUserProfile, decrypt]);
+  }, [messages, addStoredMessage, fetchUserProfile, decrypt, walletState.address]);
+
+  // Handle delivery confirmations
+  const handleDeliveryConfirmation = useCallback((confirmation: DeliveryConfirmation) => {
+    try {
+      console.log('📦 Processing delivery confirmation for message:', confirmation.messageId);
+      
+      // Find the message in storage and update its status
+      const storageKey = `messaging_messages_${walletState.address}`;
+      const storedMessagesStr = localStorage.getItem(storageKey);
+      
+      if (storedMessagesStr) {
+        const storedMessages: StoredMessage[] = JSON.parse(storedMessagesStr);
+        const messageIndex = storedMessages.findIndex(m => m.id === confirmation.messageId);
+        
+        if (messageIndex !== -1) {
+          storedMessages[messageIndex].status = "delivered";
+          localStorage.setItem(storageKey, JSON.stringify(storedMessages));
+          console.log('✓ Updated message status to delivered:', confirmation.messageId);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to handle delivery confirmation:', error);
+    }
+  }, [walletState.address]);
 
   // Initialize PubNub when wallet connects
   useEffect(() => {
     if (!walletState.address) {
       cleanupPubNub();
+      unsubscribeFromConfirmations(walletState.address);
       setIsConnected(false);
       return;
+
     }
 
     try {
       initializePubNub(walletState.address);
       subscribeToInbox(walletState.address, handleIncomingMessage);
+      subscribeToConfirmations(walletState.address, handleDeliveryConfirmation);
       
       // Listen for connection status changes
       const statusHandler = (connected: boolean) => {
@@ -131,7 +177,7 @@ export function PubnubProvider({ children }: { children: ReactNode }) {
         variant: "destructive",
       });
     }
-  }, [walletState.address, handleIncomingMessage]);
+  }, [walletState.address, handleIncomingMessage, handleDeliveryConfirmation]);
 
   // Fetch message history when user connects (for offline message delivery)
   useEffect(() => {
@@ -195,6 +241,21 @@ export function PubnubProvider({ children }: { children: ReactNode }) {
 
           // Store the message
           addStoredMessage(receivedMessage);
+
+          // Send delivery confirmation back to sender
+          if (walletState.address) {
+            try {
+              await sendDeliveryConfirmation(
+                messageData.sender,
+                messageData.messageId,
+                walletState.address
+              );
+              console.log('✓ Delivery confirmation sent for historical message:', messageData.messageId);
+            } catch (confirmError) {
+              console.error('Failed to send delivery confirmation for historical message:', confirmError);
+              // Don't fail the whole process
+            }
+          }
         }
       } catch (error) {
         console.error('Failed to fetch message history:', error);
